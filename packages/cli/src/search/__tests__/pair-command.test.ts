@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PairingError } from "@actana/sdk/pairing/client";
+import { PairingError } from "@actana/sdk/pairing";
 import type { SearchClient } from "@actana/sdk/search";
 import { parseArgs } from "../../kit/cli-args.ts";
 import {
@@ -16,7 +16,7 @@ import {
   EXIT_PAIR_SEARCH_ERROR,
   EXIT_USAGE,
 } from "../../kit/exit-codes.ts";
-import { encodeRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import { encodeRegistrationBlob } from "@actana/sdk/pairing";
 import { registryPaths, readSearchBlobText, writeSearchBlob } from "../../registry/credentials.ts";
 import { runSearchCommand } from "../search-command.ts";
 import type { SearchCliDeps, SearchPairingPort } from "../search-deps.ts";

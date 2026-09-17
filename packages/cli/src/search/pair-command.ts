@@ -1,10 +1,7 @@
 // `actana search pair <name> <address> <code>` — enrollment from the client's side.
 
-import { PairingError, parsePairingTicket, type PairingFailure } from "@actana/sdk/pairing/client";
-import {
-  encodeRegistrationBlob,
-  type RegistrationBlob,
-} from "@actana/sdk/pairing/registration-blob";
+import { PairingError, parsePairingTicket, type PairingFailure } from "@actana/sdk/pairing";
+import { encodeRegistrationBlob, type RegistrationBlob } from "@actana/sdk/pairing";
 import type { ParsedArgs } from "../kit/cli-args.ts";
 import {
   readCurrentSearch,

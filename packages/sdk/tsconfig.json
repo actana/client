@@ -2,9 +2,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@actana/sdk/pairing": ["src/pairing.ts"],
       "@actana/sdk/pairing/server": ["src/pairing/server/index.ts"],
       "@actana/sdk/pairing/stores/json-file": ["src/pairing/stores/json-file.ts"],
-      "@actana/sdk/pairing/stores/postgres": ["src/pairing/stores/postgres.ts"]
+      "@actana/sdk/pairing/stores/postgres": ["src/pairing/stores/postgres.ts"],
+      "@actana/sdk/core": ["src/core.ts"],
+      "@actana/sdk/search": ["src/search.ts"]
     },
     "target": "ES2022",
     "lib": ["ES2022"],

@@ -22,7 +22,7 @@
 //
 // **No crypto happens in this file.** The key pair is born inside the SDK call,
 // on this machine, and its private half never crosses the wire — see
-// `@actana/sdk/pairing/client`, which is also where the fingerprint comparison
+// `@actana/sdk/pairing`, which is also where the fingerprint comparison
 // and the pinned second connection live. This module supplies an address, a
 // code and an expected fingerprint, and turns whatever comes back into a
 // registry entry, a sentence and an exit code. The one piece of parsing it does
@@ -70,8 +70,8 @@ import {
   parsePairingTicket,
   type CorePairingIdentity,
   type PairWithCoreOptions,
-} from "@actana/sdk/pairing/client";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+  type CoreRegistrationBlob,
+} from "@actana/sdk/pairing";
 import {
   coreBlobPath,
   coreExists,

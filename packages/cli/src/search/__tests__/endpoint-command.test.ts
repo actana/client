@@ -7,13 +7,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { SearchClient } from "@actana/sdk/search";
-import type {
-  Endpoint,
-  GetEndpointsResponse,
-  PutEndpointsRequest,
-} from "@actana/sdk/search/contracts";
-import { encodeRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { GetEndpointsResponse, SearchClient } from "@actana/sdk/search";
+
+type Endpoint = GetEndpointsResponse["endpoints"][number];
+type PutEndpointsRequest = Parameters<SearchClient["endpoints"]["put"]>[0];
+import { encodeRegistrationBlob } from "@actana/sdk/pairing";
 import { parseArgs } from "../../kit/cli-args.ts";
 import { EXIT_FAILURE, EXIT_OK } from "../../kit/exit-codes.ts";
 import { registryPaths, writeSearchBlob, writeCurrentSearch } from "../../registry/credentials.ts";

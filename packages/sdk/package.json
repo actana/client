@@ -17,20 +17,40 @@
   },
   "files": ["dist"],
   "exports": {
-    "./core": "./src/core.ts",
-    "./search": "./src/search.ts",
+    "./pairing": "./src/pairing.ts",
     "./pairing/server": "./src/pairing/server/index.ts",
     "./pairing/stores/json-file": "./src/pairing/stores/json-file.ts",
     "./pairing/stores/postgres": "./src/pairing/stores/postgres.ts",
-    "./*": "./src/*.ts"
+    "./core": "./src/core.ts",
+    "./search": "./src/search.ts"
   },
   "publishConfig": {
     "access": "public",
     "provenance": true,
     "exports": {
-      "./*": {
-        "types": "./dist/*.d.ts",
-        "default": "./dist/*.js"
+      "./pairing": {
+        "types": "./dist/pairing.d.ts",
+        "default": "./dist/pairing.js"
+      },
+      "./pairing/server": {
+        "types": "./dist/pairing/server/index.d.ts",
+        "default": "./dist/pairing/server/index.js"
+      },
+      "./pairing/stores/json-file": {
+        "types": "./dist/pairing/stores/json-file.d.ts",
+        "default": "./dist/pairing/stores/json-file.js"
+      },
+      "./pairing/stores/postgres": {
+        "types": "./dist/pairing/stores/postgres.d.ts",
+        "default": "./dist/pairing/stores/postgres.js"
+      },
+      "./core": {
+        "types": "./dist/core.d.ts",
+        "default": "./dist/core.js"
+      },
+      "./search": {
+        "types": "./dist/search.d.ts",
+        "default": "./dist/search.js"
       }
     }
   },

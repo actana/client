@@ -21,7 +21,7 @@ import { displayWidth, FRAME_WIDTH } from "../kit/cli-frame.ts";
 import { corePairingOutcome, corePairSuccessBlock } from "../core/core-pair-results.ts";
 import { wrapText } from "../kit/cli-frame.ts";
 import { resolveCore } from "../core/core-resolution.ts";
-import { CorePairingError, type CorePairingFailure } from "@actana/sdk/pairing/client";
+import { CorePairingError, type CorePairingFailure } from "@actana/sdk/pairing";
 import {
   EXIT_FAILURE,
   EXIT_OK,

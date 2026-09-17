@@ -47,7 +47,7 @@ import type {
   CoreLinkSessionLockState,
   CoreLinkTaskSnapshot,
 } from "@actana/sdk/core";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 
 /** The harnesses this build knows, in the order `--help` lists them. */
 export const KNOWN_HARNESSES: readonly CoreLinkPtySpawnHarness[] = Object.keys(

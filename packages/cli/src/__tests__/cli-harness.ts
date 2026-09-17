@@ -31,8 +31,7 @@ import type {
 import type { CoreConnectFn, CoreConnectOptions, CoreLinkClient } from "../core/core-connection.ts";
 import type { ClientDeps } from "../kit/cli-deps.ts";
 import type { CorePairingPort } from "../kit/client-ports.ts";
-import { CorePairingError, type CorePairingFailure } from "@actana/sdk/pairing/client";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import { CorePairingError, type CorePairingFailure, type CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type { OpenSessionGateway, SessionGateway, StartedSession } from "../core/session-gateway.ts";
 import { projectFilesErrorFrom } from "../core/project-files-gateway.ts";
 import type {

@@ -1,4 +1,4 @@
-import type { EndpointDeclaration, GetEndpointsResponse } from "@actana/sdk/search/contracts";
+import type { EndpointDeclaration, GetEndpointsResponse } from "@actana/sdk/search";
 import type { SearchClient } from "@actana/sdk/search";
 import { parseInteger, type ParsedArgs } from "../kit/cli-args.ts";
 import { formatJson, formatTable, orDash } from "../kit/cli-output.ts";

@@ -1,9 +1,12 @@
 /**
  * `@actana/sdk/search` — the typed client for a Search instance.
  *
- * Zod contracts are `@actana/sdk/search/contracts` (and one module per family
- * beneath `search/contracts/`). They are not re-exported here.
+ * Wire contract types (`QueryRequest`, `EndpointDeclaration`, `GetEndpointsResponse`)
+ * are exported from this entry as type-only; Zod schemas remain internal under
+ * `search/contracts/`.
  */
+
+export type { QueryRequest, EndpointDeclaration, GetEndpointsResponse } from "./search/contracts.ts";
 
 /** The wire protocol version this SDK speaks. Reported by `GET /capabilities`. */
 export const SEARCH_PROTOCOL_VERSION = 1;

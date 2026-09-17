@@ -22,7 +22,7 @@
 
 import { CoreClient } from "@actana/sdk/core";
 import { DurableCoreClient } from "@actana/sdk/core";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type { CoreLinkCursorStorage } from "@actana/sdk/core";
 import type { CoreConnectionInfo } from "@actana/sdk/core";
 import type {

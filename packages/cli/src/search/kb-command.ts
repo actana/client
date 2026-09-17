@@ -1,4 +1,4 @@
-import type { QueryRequest } from "@actana/sdk/search/contracts";
+import type { QueryRequest } from "@actana/sdk/search";
 import { parseFraction, parseInteger, type ParsedArgs } from "../kit/cli-args.ts";
 import { formatJson, formatTable, orDash, relativeTime } from "../kit/cli-output.ts";
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "../kit/exit-codes.ts";

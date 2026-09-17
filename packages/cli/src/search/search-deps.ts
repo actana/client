@@ -1,8 +1,7 @@
 // What the Search client nouns need from the world, as one injected bag.
 
 import type { SearchClient } from "@actana/sdk/search";
-import type { PairingIdentity, PairWithSearchOptions } from "@actana/sdk/pairing/client";
-import type { RegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { PairingIdentity, PairWithSearchOptions, RegistrationBlob } from "@actana/sdk/pairing";
 
 export type SearchPairingPort = {
   identify: (opts: { address: string; timeoutMs?: number }) => Promise<PairingIdentity>;

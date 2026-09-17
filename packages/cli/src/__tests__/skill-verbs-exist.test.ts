@@ -1,7 +1,7 @@
 // Every verb the shipped skill teaches exists on the binary beside it (#288).
 
 import { describe, it, expect } from "vitest";
-import { CLIENT_NOUNS, USAGE } from "../run-client.ts";
+import { CLIENT_NOUNS, clientHelp } from "../run-client.ts";
 import {
   ORCHESTRATION_SKILL_FILES,
   ORCHESTRATION_SKILL_NAMES,
@@ -23,8 +23,8 @@ function namesTaughtBySkill(): string[] {
 
 function namesInHelp(): string[] {
   const names = new Set<string>();
-  for (const heading of ["Cores this machine can reach"]) {
-    const block = USAGE.split(new RegExp(`^${heading}$`, "m"))[1]?.split(/\n\s*\n/)[0] ?? "";
+  for (const heading of ["Cores"]) {
+    const block = clientHelp().split(new RegExp(`^${heading}$`, "m"))[1]?.split(/\n\s*\n/)[0] ?? "";
     for (const line of block.split("\n")) {
       const match = /^ {2}([a-z][a-z-]*)/.exec(line);
       if (match) names.add(match[1]!);

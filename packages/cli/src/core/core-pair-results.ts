@@ -40,7 +40,7 @@ import {
   wrapText,
   type Span,
 } from "../kit/cli-frame.ts";
-import type { CorePairingErrorDetail, CorePairingFailure } from "@actana/sdk/pairing/client";
+import type { CorePairingErrorDetail, CorePairingFailure } from "@actana/sdk/pairing";
 import {
   EXIT_PAIR_CERTIFICATE_INVALID,
   EXIT_PAIR_CORE_ERROR,

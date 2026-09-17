@@ -19,4 +19,4 @@ export type {
   SessionAttachExit,
   AttachAuthority,
 } from "../core/session-attach-channel.ts";
-export type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+export type { CoreRegistrationBlob } from "@actana/sdk/pairing";

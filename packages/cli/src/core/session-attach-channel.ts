@@ -48,7 +48,7 @@
 import { CoreClient, CoreLinkRequestError } from "@actana/sdk/core";
 import { SESSION_LOCKED_ERROR_CODE } from "@actana/sdk/core";
 import { SessionGatewayError } from "./session-gateway.ts";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type { Unsubscribe } from "../kit/cli-terminal.ts";
 
 /** How a harness's process ended, while somebody was attached to it. */

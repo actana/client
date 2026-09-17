@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import { CoreClient } from "@actana/sdk/core";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type { Unsubscribe } from "../kit/cli-terminal.ts";
 
 /** How a remote shell ended. `signal` is the far side's, not this process's. */

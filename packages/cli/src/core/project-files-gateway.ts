@@ -50,7 +50,7 @@ import type {
   CoreFileUploadOptions,
 } from "@actana/sdk/core";
 import type { CoreLinkProjectSnapshot } from "@actana/sdk/core";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 
 /**
  * What went wrong, in a vocabulary the verbs can turn into a message and an

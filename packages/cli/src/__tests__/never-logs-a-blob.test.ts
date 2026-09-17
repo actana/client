@@ -13,7 +13,7 @@
 // exactly the line somebody adds without thinking.
 
 import { describe, it, expect, afterEach } from "vitest";
-import { CorePairingError } from "@actana/sdk/pairing/client";
+import { CorePairingError } from "@actana/sdk/pairing";
 import {
   fakeAttachment,
   fakePairing,

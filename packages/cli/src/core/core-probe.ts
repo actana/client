@@ -13,7 +13,7 @@
 // the client this builds rather than a second way of building one.
 
 import { CoreClient } from "@actana/sdk/core";
-import type { CoreRegistrationBlob } from "@actana/sdk/pairing/registration-blob";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 
 /** What one round trip to a Core tells you about it. */
 export type CoreProbe = {
