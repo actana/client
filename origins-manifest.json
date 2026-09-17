@@ -677,8 +677,10 @@
       "destPath": "packages/sdk/src/pairing/cert-material.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "fc72fc23ac8732a4232b859010cb7263871a51fb72b5797d39040281f2a642f9",
+      "destSha256": "85ff67221fe9bee4c1313a4dd901c0696a4f86ee0b5ae50987f7c94c017fdb6d",
       "liftTableRow": "cert-material",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "T-203: CA/leaf names parameterized; Control serial draw"
     },
     {
       "sourceRepo": "actana/control",
@@ -686,8 +688,10 @@
       "destPath": "packages/sdk/src/pairing/bearer.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "4991d415f0ec9232a3883e9c93b4973760c011b51c37ebc5f1c2b3dd823a76cb",
+      "destSha256": "0af04985b169f34a03d3201f18c66b1006393b2ea9b33c660556b11b77c6142f",
       "liftTableRow": "bearer",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "T-203: signature-first verify; finite exp"
     },
     {
       "sourceRepo": "actana/control",
@@ -695,8 +699,10 @@
       "destPath": "packages/sdk/src/pairing/material-store.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "8e4c49f45160acef256371d86b8450619f40f78f2ccc29e41155ca8fa756e74f",
+      "destSha256": "beaff79569f35b4e07cb3114f5e24a2998d6d3620cd4479459863074d90a8b92",
       "liftTableRow": "material-store",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "T-203: stateDir injected; legacy CA check behind option"
     },
     {
       "sourceRepo": "actana/control",

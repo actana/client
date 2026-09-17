@@ -17,13 +17,19 @@
     "pretest": "node scripts/require-node-24.mjs",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint packages scripts eslint.config.mjs",
-    "test": "node scripts/run-unit-tests.mjs"
+    "test": "node scripts/run-unit-tests.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
+    "test:changesets": "node scripts/assert-cli-only-changeset.mjs",
+    "check:control-drift": "node scripts/check-control-drift.mjs"
   },
   "dependencies": {
     "@actana/cli": "workspace:*",
     "@actana/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@changesets/cli": "2.29.2",
     "@eslint/js": "10.0.1",
     "@types/node": "25.8.0",
     "eslint": "10.6.0",

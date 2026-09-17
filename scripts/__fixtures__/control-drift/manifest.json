@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-code.ts",
+      "destPath": "packages/sdk/src/pairing/code.ts",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/digest.ts",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/stores/json-file.ts",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/search/src/pairing/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/stores/postgres.ts",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  ]
+}

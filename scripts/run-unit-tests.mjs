@@ -8,19 +8,27 @@ import * as path from "node:path";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 const STAGES = [
+  { name: "scripts", command: ["exec", "vitest", "run", "--config", "vitest.config.ts"] },
   { name: "@actana/sdk", filter: "@actana/sdk" },
   { name: "@actana/cli", filter: "@actana/cli" },
+  { name: "changesets (CLI-only bump)", script: "scripts/assert-cli-only-changeset.mjs" },
 ];
 
 const results = [];
 
 for (const stage of STAGES) {
   console.log(`\n── ${stage.name} ──`);
-  const run = spawnSync(
-    "pnpm",
-    ["--filter", stage.filter, "--if-present", "test"],
-    { cwd: repoRoot, stdio: "inherit", env: process.env },
-  );
+  const run = stage.script
+    ? spawnSync(process.execPath, [path.join(repoRoot, stage.script)], {
+        cwd: repoRoot,
+        stdio: "inherit",
+        env: process.env,
+      })
+    : spawnSync(
+        "pnpm",
+        stage.command ?? ["--filter", stage.filter, "--if-present", "test"],
+        { cwd: repoRoot, stdio: "inherit", env: process.env },
+      );
   results.push({ ...stage, code: run.status ?? 1 });
 }
 

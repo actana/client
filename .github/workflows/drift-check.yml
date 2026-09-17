@@ -1,0 +1,59 @@
+name: Control drift check
+
+# Weekly diff of actana/control main against origins-manifest.json. On drift,
+# open an issue in this repository naming the lifted files that need porting.
+# Reads Control only — never writes to it. Retired by T-406.
+
+on:
+  schedule:
+    - cron: "30 8 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: control-drift-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24.19.0"
+
+jobs:
+  drift-check:
+    name: Control pairing drift
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Compare Control main to origins manifest
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/check-control-drift.mjs \
+            --open-issue \
+            --repo "${{ github.repository }}" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --json > "$RUNNER_TEMP/drift-summary.json"
+        continue-on-error: true
+
+      - name: Report drift summary
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f "$RUNNER_TEMP/drift-summary.json" ]]; then
+            cat "$RUNNER_TEMP/drift-summary.json"
+          fi
+          if [[ "${{ steps.check.outcome }}" != "success" ]]; then
+            echo "::warning title=Control drift::Lifted files on Control main no longer match origins-manifest.json"
+            exit 1
+          fi
