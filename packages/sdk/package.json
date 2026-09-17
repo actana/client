@@ -17,6 +17,8 @@
   },
   "files": ["dist"],
   "exports": {
+    "./core": "./src/core.ts",
+    "./search": "./src/search.ts",
     "./*": "./src/*.ts"
   },
   "publishConfig": {
@@ -33,17 +35,29 @@
     "build": "tsc -p tsconfig.build.json",
     "prepack": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/vendor-control-pin.mjs",
     "test": "vitest run"
   },
   "dependencies": {
     "@peculiar/x509": "1.14.2",
     "selfsigned": "5.5.0",
     "undici": "8.9.0",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "zod": "3.25.76"
+  },
+  "peerDependencies": {
+    "pg": "^8.11.0"
+  },
+  "peerDependenciesMeta": {
+    "pg": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "25.8.0",
+    "@types/pg": "8.15.5",
     "@types/ws": "8.18.1",
+    "pg": "8.16.3",
     "typescript": "6.0.3",
     "vitest": "4.1.6"
   }

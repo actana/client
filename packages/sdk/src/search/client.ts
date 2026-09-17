@@ -1,0 +1,999 @@
+// `SearchClient` — the only way into a Search instance.
+//
+// CONTEXT.md rule 4: "The SDK is the only way in. No consumer reads a table."
+// This is that door. It holds the mTLS material a pairing produced, posts every
+// request through one `undici` `Agent`, and turns anything that is not a 2xx
+// into a {@link SearchApiError}.
+//
+// **The namespaces below are the whole surface, and TASK-004 filled them.**
+// `kbs`, `documents`, `keywords`, `clusters`, `tags`, `endpoints`, `webhooks`
+// and `events()` are implemented against the zod contracts in
+// `src/contracts/`. They were *named* before they existed so that the shape of
+// this client was decided once — by the routes rather than by whichever method
+// somebody needed next — and `not-implemented` is now something only an older
+// instance answers, never this client.
+//
+// **`undici` rather than `fetch`.** Node's global `fetch` is undici, but its
+// per-request `dispatcher` is not a public, typed option, and mTLS material has
+// to reach the connection pool somehow. Naming the dependency is the honest
+// version of the same thing.
+
+import { randomBytes } from "node:crypto";
+import { Agent, request as undiciRequest } from "undici";
+import type { Dispatcher } from "undici";
+import { SearchApiError } from "./errors.ts";
+import {
+  searchConnectionFromBlob,
+  type SearchRegistrationBlob,
+} from "../pairing/registration-blob.ts";
+import type { SearchHealth, SearchPairStatus } from "./wire.ts";
+import type {
+  AttachChunkKeywordRequest,
+  BulkDocumentsRequest,
+  BulkDocumentsResponse,
+  Capabilities,
+  Chunk,
+  ChunkKeywordLink,
+  ChunkKeywordResponse,
+  ClusteringStatus,
+  CreateChunkRequest,
+  CreateKbRequest,
+  DeleteChunkResponse,
+  DeleteDocumentResponse,
+  DeleteKbResponse,
+  DeleteKeywordResponse,
+  DeleteTagDefinitionResponse,
+  DeleteWebhookResponse,
+  ExtractKeywordsRequest,
+  ExtractKeywordsResponse,
+  GetEndpointsResponse,
+  GetWebhookResponse,
+  IncludeDocumentRequest,
+  IncludeDocumentResponse,
+  IngestJsonRequest,
+  IngestResponse,
+  Keyword,
+  KnowledgeBase,
+  ListChunkKeywordsResponse,
+  ListChunksQuery,
+  ListChunksResponse,
+  ListClustersQuery,
+  ListClustersResponse,
+  ListDocumentsQuery,
+  ListDocumentsResponse,
+  ListKbsQuery,
+  ListKbsResponse,
+  ListKeywordsQuery,
+  ListKeywordsResponse,
+  ListTagDefinitionsResponse,
+  NextAvailableSlotQuery,
+  NextAvailableSlotResponse,
+  PutEndpointsRequest,
+  PutEndpointsResponse,
+  PutKeywordRequest,
+  PutTagDefinitionsRequest,
+  PutTagDefinitionsResponse,
+  PutWebhookRequest,
+  QueryRequest,
+  QueryResponse,
+  ReclusterResponse,
+  SearchDocument,
+  SearchEvent,
+  TagDefinition,
+  TagUsage,
+  TagUsageResponse,
+  UpdateChunkRequest,
+  UpdateDocumentRequest,
+  UpdateKbRequest,
+  UpsertDocumentRequest,
+  UpsertDocumentResponse,
+  Whoami,
+} from "./contracts.ts";
+
+
+/** What a request may carry. One of these, or nothing. */
+export type SearchRequestBody =
+  | { json: unknown }
+  | { multipart: FormData }
+  | { stream: NodeJS.ReadableStream | ReadableStream; contentType?: string }
+  | undefined;
+
+export type SearchRequestOptions = {
+  /** Query parameters, appended to the path. */
+  query?: Record<string, string | number | boolean | undefined>;
+  /** Extra headers. Never a credential — the certificate is the credential. */
+  headers?: Record<string, string>;
+  /** Milliseconds before the request is abandoned. */
+  timeoutMs?: number;
+} & ({ json?: unknown; multipart?: FormData; stream?: never } | { stream?: NodeJS.ReadableStream | ReadableStream; contentType?: string; json?: never; multipart?: never });
+
+export type SearchClientOptions = {
+  /** What this client calls itself, in logs on this side only. */
+  label?: string;
+  /** Default per-request timeout. 30s. */
+  timeoutMs?: number;
+};
+
+/** The default per-request timeout. Ingest passes its own. */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+export class SearchClient {
+  /** `https://host:port`. No path, no trailing slash. */
+  readonly baseUrl: string;
+  readonly label: string;
+  private readonly agent: Agent;
+  private readonly timeoutMs: number;
+
+  private constructor(baseUrl: string, agent: Agent, label: string, timeoutMs: number) {
+    this.baseUrl = baseUrl;
+    this.agent = agent;
+    this.label = label;
+    this.timeoutMs = timeoutMs;
+  }
+
+  /**
+   * Build a client from the credential a pairing produced.
+   *
+   * The three PEMs go straight into the connection pool's TLS options: `ca`
+   * pins the instance, `cert` and `key` are what it recognises this client by.
+   * The key is the one `pairWithSearch` generated locally and never sent.
+   */
+  static fromRegistrationBlob(
+    blob: SearchRegistrationBlob,
+    opts: SearchClientOptions = {},
+  ): SearchClient {
+    const connection = searchConnectionFromBlob(blob);
+    if (!connection.tls) {
+      throw new SearchApiError(
+        "bad-endpoint",
+        0,
+        `the blob's endpoint ${blob.endpoint} is not an https:// origin, so there is no ` +
+          "handshake to present a certificate on",
+      );
+    }
+    const agent = new Agent({
+      connect: {
+        ca: connection.tls.ca,
+        cert: connection.tls.cert,
+        key: connection.tls.key,
+        rejectUnauthorized: true,
+      },
+    });
+    return new SearchClient(
+      connection.httpsBaseUrl,
+      agent,
+      opts.label ?? blob.label ?? "actana-search-client",
+      opts.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+    );
+  }
+
+  /**
+   * Build a client against a plain-HTTP instance running with
+   * `SEARCH_DEV_INSECURE=1`, identifying as `pairedClientId`.
+   *
+   * It exists for the fixture suites, it sends the id in a header, and a header
+   * is exactly what ADR 0003 says identity is never read from — which is why
+   * the *server* half refuses to start this way under `NODE_ENV=production`.
+   */
+  static insecureForTests(baseUrl: string, pairedClientId: string): SearchClient {
+    const client = new SearchClient(
+      baseUrl.replace(/\/+$/, ""),
+      new Agent(),
+      "insecure-test-client",
+      DEFAULT_REQUEST_TIMEOUT_MS,
+    );
+    client.insecureClientId = pairedClientId;
+    return client;
+  }
+
+  private insecureClientId: string | undefined;
+
+  /** Release the connection pool. A long-lived process should call this. */
+  async close(): Promise<void> {
+    await this.agent.close();
+  }
+
+  /**
+   * One request, and the only place a response is turned into an error.
+   *
+   * A non-2xx is a {@link SearchApiError} carrying whatever `code` the instance
+   * sent, so a caller switches on the instance's vocabulary rather than on a
+   * status number it would have to map itself.
+   */
+  async request<T>(
+    method: string,
+    path: string,
+    options: SearchRequestOptions = {},
+  ): Promise<T> {
+    const url = new URL(path.startsWith("/") ? path : `/${path}`, this.baseUrl);
+    for (const [key, value] of Object.entries(options.query ?? {})) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+
+    const headers: Record<string, string> = { accept: "application/json", ...options.headers };
+    if (this.insecureClientId) headers["x-paired-client"] = this.insecureClientId;
+
+    let body: Dispatcher.RequestOptions["body"];
+    if (options.json !== undefined) {
+      headers["content-type"] = "application/json";
+      body = JSON.stringify(options.json);
+    } else if (options.multipart) {
+      /**
+       * Encoded here rather than handed over as a `FormData`.
+       *
+       * `undici.request` — the dispatch-level API this client uses, because it
+       * is the one that takes a `dispatcher` and therefore the one mTLS
+       * material can reach — does **not** accept a `FormData` body. Only
+       * `fetch` does, and `fetch` has no typed per-request dispatcher. Passing
+       * one anyway sends a request with no body at all, which the far side
+       * eventually answers `408` on: a failure mode with no error in it.
+       *
+       * So the envelope is written out here, and the boundary is ours.
+       */
+      const encoded = await encodeMultipart(options.multipart);
+      headers["content-type"] = encoded.contentType;
+      body = encoded.body;
+    } else if (options.stream) {
+      headers["content-type"] = options.contentType ?? "application/octet-stream";
+      body = options.stream as unknown as Dispatcher.RequestOptions["body"];
+    }
+
+    let response;
+    try {
+      response = await undiciRequest(url, {
+        method: method.toUpperCase() as Dispatcher.HttpMethod,
+        dispatcher: this.agent,
+        headersTimeout: options.timeoutMs ?? this.timeoutMs,
+        bodyTimeout: options.timeoutMs ?? this.timeoutMs,
+        headers,
+        body,
+      });
+    } catch (err) {
+      throw new SearchApiError(
+        "unreachable",
+        0,
+        `${method.toUpperCase()} ${url.pathname} could not be sent: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        undefined,
+        { cause: err },
+      );
+    }
+
+    const text = await response.body.text();
+    const parsed = text === "" ? undefined : safeJson(text);
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return parsed as T;
+    }
+    const failure = (parsed ?? {}) as { code?: unknown; error?: unknown; message?: unknown; detail?: unknown };
+    throw new SearchApiError(
+      typeof failure.code === "string" ? failure.code : `http-${response.statusCode}`,
+      response.statusCode,
+      typeof failure.error === "string"
+        ? failure.error
+        : typeof failure.message === "string"
+          ? failure.message
+          : `${method.toUpperCase()} ${url.pathname} answered ${response.statusCode}`,
+      failure.detail,
+    );
+  }
+
+  /** `GET /v1/health`. Open — it answers without a certificate too. */
+  health(): Promise<SearchHealth> {
+    return this.request<SearchHealth>("GET", "/v1/health");
+  }
+
+  /** `GET /v1/capabilities`. What this instance's build can do. */
+  capabilities(): Promise<Capabilities> {
+    return this.request<Capabilities>("GET", "/v1/capabilities");
+  }
+
+  /** `GET /v1/pair/status`. Who this certificate is, and what it was granted. */
+  pairStatus(): Promise<SearchPairStatus> {
+    return this.request<SearchPairStatus>("GET", "/v1/pair/status");
+  }
+
+  /**
+   * `GET /v1/whoami` — the explicit identity call.
+   *
+   * `clientId` is the `search.paired_client.id` this certificate resolves to,
+   * which is the string `search.knowledge_base.paired_client_id` carries;
+   * `scopes` is every scope this pairing permits rather than the one stored
+   * value, and `schemaVersion` is the instance's, so a caller that must know
+   * both who it is and what version it is talking to makes one call.
+   *
+   * **Neither {@link SearchClient.capabilities} nor the registration blob has
+   * the client id.** `capabilities()` is about the instance, and
+   * `SearchRegistrationBlob` carries an endpoint, a label and three PEMs —
+   * which is why Studio's migration had to be told the id by an operator before
+   * this route existed. {@link SearchClient.pairStatus} does answer one, under
+   * `id`, beside the pairing lifecycle; this is the same fact named for the
+   * question, and it is the one the contracts define (`WhoamiSchema`).
+   *
+   * Any paired client may call it, at any scope.
+   */
+  whoami(): Promise<Whoami> {
+    return this.request<Whoami>("GET", "/v1/whoami");
+  }
+
+  // ── The namespaces ────────────────────────────────────────────────────────
+  //
+  // Every signature below is `z.infer`red from `@actana/search/contracts`,
+  // which is the same object the instance validates the request with (ADR
+  // 0009). A field this client can send is a field that route accepts, by
+  // construction rather than by review.
+
+  readonly kbs = {
+    /** `GET /v1/kbs`. */
+    list: async (query: ListKbsQuery = {}): Promise<KnowledgeBase[]> => {
+      const answer = await this.request<ListKbsResponse>("GET", "/v1/kbs", {
+        query: { ...(query.scope === undefined ? {} : { scope: query.scope }) },
+      });
+      return answer.knowledgeBases;
+    },
+
+    /** `POST /v1/kbs`. */
+    create: (input: CreateKbRequest): Promise<KnowledgeBase> =>
+      this.request<KnowledgeBase>("POST", "/v1/kbs", { json: input }),
+
+    /** `GET /v1/kbs/:id`. 404 for a KB that is not this client's (ADR 0009). */
+    get: (kbId: string): Promise<KnowledgeBase> =>
+      this.request<KnowledgeBase>("GET", `/v1/kbs/${encodeURIComponent(kbId)}`),
+
+    /** `PATCH /v1/kbs/:id`. */
+    update: (kbId: string, patch: UpdateKbRequest): Promise<KnowledgeBase> =>
+      this.request<KnowledgeBase>("PATCH", `/v1/kbs/${encodeURIComponent(kbId)}`, { json: patch }),
+
+    /** `DELETE /v1/kbs/:id`. A soft delete: the KB becomes archived. */
+    delete: (kbId: string): Promise<DeleteKbResponse> =>
+      this.request<DeleteKbResponse>("DELETE", `/v1/kbs/${encodeURIComponent(kbId)}`),
+
+    /**
+     * `POST /v1/kbs/:id/restore` — the other half of the soft delete.
+     *
+     * Clears `deleted_at` on the KB and un-archives the documents that were
+     * archived with it. A KB archived under a name something else has taken
+     * since comes back **renamed** (`…_restored`, then a suffixed variant), so
+     * the answer is the knowledge base rather than an acknowledgement: the
+     * caller has to be able to see the name it got back.
+     *
+     * `404` for a KB that is not this client's or does not exist, as every
+     * other KB route (ADR 0009 D5), and `409 conflict` for one that is not
+     * archived in the first place.
+     */
+    restore: (kbId: string): Promise<KnowledgeBase> =>
+      this.request<KnowledgeBase>("POST", `/v1/kbs/${encodeURIComponent(kbId)}/restore`),
+
+    /**
+     * `POST /v1/kbs/:id/query`.
+     *
+     * The return type follows `mode`: the default is the hybrid rank, and
+     * `mode: "v1-tags"` is the pre-v2 tag-filter-then-vector path. Both are
+     * served; neither is a reimplementation of the other.
+     */
+    query: (kbId: string, input: QueryRequest): Promise<QueryResponse> =>
+      this.request<QueryResponse>("POST", `/v1/kbs/${encodeURIComponent(kbId)}/query`, {
+        json: input,
+      }),
+
+    /**
+     * `POST /v1/kbs/:id/documents` — the ingest.
+     *
+     * Three shapes, and they are three different pipelines rather than three
+     * spellings of one: `{ file }` uploads bytes as `multipart/form-data` and
+     * runs the resumable worker flow over them, `{ url }` has the instance
+     * fetch them and do the same, and `{ text }` takes the `ingestDocument`
+     * path. Asynchronous in all three: what comes back is a document id and a
+     * status to poll, or to wait for on {@link SearchClient.events}.
+     *
+     * `documentId` is the caller's own id for the document, carried on all
+     * three shapes (a form part on the multipart one), and the answer echoes
+     * it: the same id twice in one KB is an idempotent re-ingest and the same id
+     * in a different KB is a `409`.
+     */
+    ingest: (kbId: string, input: IngestInput): Promise<IngestResponse> => {
+      const path = `/v1/kbs/${encodeURIComponent(kbId)}/documents`;
+      if ("file" in input) {
+        return this.request<IngestResponse>("POST", path, {
+          multipart: ingestFormData(input),
+        });
+      }
+      return this.request<IngestResponse>("POST", path, { json: input });
+    },
+  };
+
+  readonly documents = {
+    /**
+     * `GET /v1/kbs/:id/documents`.
+     *
+     * `tagFilters` is a list of conditions and a query string holds strings, so
+     * it goes over as one JSON-encoded parameter — which is what the route
+     * parses it back out of. Every other member of the query is a scalar and
+     * travels as itself.
+     */
+    list: (kbId: string, query: ListDocumentsQuery = {}): Promise<ListDocumentsResponse> => {
+      const { tagFilters, ...scalars } = query;
+      return this.request<ListDocumentsResponse>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/documents`,
+        {
+          query: {
+            ...(scalars as Record<string, string | number | boolean | undefined>),
+            ...(tagFilters === undefined ? {} : { tagFilters: JSON.stringify(tagFilters) }),
+          },
+        },
+      );
+    },
+
+    /** `GET /v1/kbs/:id/documents/:docId`. Poll this for `processingStatus`. */
+    get: (kbId: string, documentId: string): Promise<SearchDocument> =>
+      this.request<SearchDocument>("GET", documentPath(kbId, documentId)),
+
+    /** `PATCH /v1/kbs/:id/documents/:docId`. */
+    update: (
+      kbId: string,
+      documentId: string,
+      patch: UpdateDocumentRequest,
+    ): Promise<SearchDocument> =>
+      this.request<SearchDocument>("PATCH", documentPath(kbId, documentId), { json: patch }),
+
+    /** `DELETE /v1/kbs/:id/documents/:docId`. */
+    delete: (kbId: string, documentId: string): Promise<DeleteDocumentResponse> =>
+      this.request<DeleteDocumentResponse>("DELETE", documentPath(kbId, documentId)),
+
+    /**
+     * `PUT /v1/kbs/:id/documents/:docId/blob` — attach or replace the stored
+     * bytes of a document that already exists, with **no re-ingest**.
+     *
+     * The row is repointed at a new object in the instance's bucket and
+     * `fileUrl`, `mimeType` and `fileSize` are rewritten; `processingStatus`,
+     * the chunks, their vectors and the keyword overlay are untouched. That is
+     * the difference between this and {@link SearchClient.kbs.ingest}, which
+     * creates a document and runs a pipeline: here the document is the one that
+     * is already there, and what it says about itself does not change.
+     *
+     * **This is the migration's blob path.** Studio's TASK-013 moves
+     * `search.document` rows by SQL and streams their bytes through here, and
+     * it is safe to retry: attaching the same bytes twice leaves the row in the
+     * same state (a second object is written and the row points at it — the key
+     * scheme is ingest's, so the previous object is superseded rather than
+     * overwritten, and it is left in the bucket). Known cost: a replaced
+     * object is orphaned — the instance has no GC or reaper for it yet.
+     *
+     * `404` for a document that is not this client's or does not exist, like
+     * every other document route. The attachable set is exactly `completed`,
+     * `failed`, and `pending` with `includedInKb: false`; anything else — the
+     * in-flight statuses, or `pending` with `includedInKb: true`, which has a
+     * job queued over the current bytes — is `409 conflict`, including when the
+     * document leaves the set while the bytes are uploading. Poll
+     * {@link SearchClient.documents.get} until it settles.
+     */
+    attachBlob: (
+      kbId: string,
+      documentId: string,
+      input: AttachBlobInput,
+    ): Promise<SearchDocument> =>
+      this.request<SearchDocument>("PUT", `${documentPath(kbId, documentId)}/blob`, {
+        multipart: attachBlobFormData(input),
+      }),
+
+    /** `GET …/documents/:docId/chunks`. */
+    chunks: (
+      kbId: string,
+      documentId: string,
+      query: ListChunksQuery = {},
+    ): Promise<ListChunksResponse> =>
+      this.request<ListChunksResponse>("GET", `${documentPath(kbId, documentId)}/chunks`, {
+        query: query as Record<string, string | number | boolean | undefined>,
+      }),
+
+    /** `PATCH …/chunks/:chunkId`. Changing `content` re-embeds the chunk. */
+    updateChunk: (
+      kbId: string,
+      documentId: string,
+      chunkId: string,
+      patch: UpdateChunkRequest,
+    ): Promise<Chunk> =>
+      this.request<Chunk>(
+        "PATCH",
+        `${documentPath(kbId, documentId)}/chunks/${encodeURIComponent(chunkId)}`,
+        { json: patch },
+      ),
+
+    /** `DELETE …/chunks/:chunkId`. */
+    deleteChunk: (
+      kbId: string,
+      documentId: string,
+      chunkId: string,
+    ): Promise<DeleteChunkResponse> =>
+      this.request<DeleteChunkResponse>(
+        "DELETE",
+        `${documentPath(kbId, documentId)}/chunks/${encodeURIComponent(chunkId)}`,
+      ),
+
+    /** `POST …/documents/:docId/include` — the searchable-or-not toggle. */
+    include: (
+      kbId: string,
+      documentId: string,
+      input: IncludeDocumentRequest,
+    ): Promise<IncludeDocumentResponse> =>
+      this.request<IncludeDocumentResponse>(
+        "POST",
+        `${documentPath(kbId, documentId)}/include`,
+        { json: input },
+      ),
+
+    /** `POST /v1/kbs/:id/documents/upsert` — replace-by-identity, or create. */
+    upsert: (kbId: string, input: UpsertDocumentRequest): Promise<UpsertDocumentResponse> =>
+      this.request<UpsertDocumentResponse>(
+        "POST",
+        `/v1/kbs/${encodeURIComponent(kbId)}/documents/upsert`,
+        { json: input },
+      ),
+
+    /**
+     * `POST /v1/kbs/:id/documents/bulk` — enable, disable or delete many.
+     *
+     * `{ operation, documentIds }` for a list the caller holds, capped at 500
+     * and refused whole with a `404` if any id is not in this KB, or
+     * `{ operation, enabledFilter }` for every document in the KB (or every
+     * enabled or disabled one), which is not capped at all.
+     */
+    bulk: (kbId: string, input: BulkDocumentsRequest): Promise<BulkDocumentsResponse> =>
+      this.request<BulkDocumentsResponse>(
+        "POST",
+        `/v1/kbs/${encodeURIComponent(kbId)}/documents/bulk`,
+        { json: input },
+      ),
+  };
+
+  /**
+   * Chunks addressed by their own id, and the one write that makes a new one.
+   *
+   * **Why a second namespace rather than more `documents.*` methods.** A chunk
+   * id is unique across the instance, and a caller that holds one — Studio's
+   * chunk editor and its `kb_admin` tool both do — has no document id to put
+   * in a path. So these methods take `(kbId, chunkId)`, and the
+   * document-addressed ones on {@link SearchClient.documents} and
+   * {@link SearchClient.keywords} stay exactly as they are: two addressings for
+   * one chunk, each on the namespace whose arguments a caller actually has,
+   * rather than one method whose third argument means two different things.
+   */
+  readonly chunks = {
+    /**
+     * `POST /v1/kbs/:id/documents/:docId/chunks` — one chunk, by hand.
+     *
+     * The content is embedded through the KB's own endpoint before it is
+     * stored, the chunk lands at the next `chunkIndex`, and it inherits its
+     * document's tag values. `(kbId, documentId)` and not `(kbId, chunkId)`
+     * because a chunk that does not exist yet has no id and *does* have a
+     * document.
+     */
+    create: (
+      kbId: string,
+      documentId: string,
+      input: CreateChunkRequest,
+    ): Promise<Chunk> =>
+      this.request<Chunk>("POST", `${documentPath(kbId, documentId)}/chunks`, { json: input }),
+
+    /** `GET /v1/kbs/:id/chunks/:chunkId`. 404 for a chunk outside this KB. */
+    get: (kbId: string, chunkId: string): Promise<Chunk> =>
+      this.request<Chunk>("GET", chunkPath(kbId, chunkId)),
+
+    /**
+     * `GET /v1/kbs/:id/chunks/:chunkId/keywords` — this chunk's keyword links.
+     *
+     * The **links**, not the KB's vocabulary: each row is the keyword plus the
+     * join, so it carries `source` (`llm` for the extractor's, `manual` for a
+     * person's) and `attachedAt`, neither of which
+     * {@link SearchClient.keywords}`.list` can tell you. Ordered by the
+     * canonical form. `404` for a chunk outside this KB, as
+     * {@link SearchClient.chunks}`.get` is.
+     *
+     * Unwrapped to the array, as `keywords.list` is: there is nothing else in
+     * the envelope and no paging on it.
+     */
+    keywords: async (kbId: string, chunkId: string): Promise<ChunkKeywordLink[]> => {
+      const answer = await this.request<ListChunkKeywordsResponse>(
+        "GET",
+        `${chunkPath(kbId, chunkId)}/keywords`,
+      );
+      return answer.keywords;
+    },
+
+    /** `PUT /v1/kbs/:id/chunks/:chunkId/keywords` — attach, by chunk id. */
+    attachKeyword: (
+      kbId: string,
+      chunkId: string,
+      input: AttachChunkKeywordRequest,
+    ): Promise<ChunkKeywordResponse> =>
+      this.request<ChunkKeywordResponse>("PUT", `${chunkPath(kbId, chunkId)}/keywords`, {
+        json: input,
+      }),
+
+    /** `DELETE /v1/kbs/:id/chunks/:chunkId/keywords/:keywordId`. */
+    detachKeyword: (
+      kbId: string,
+      chunkId: string,
+      keywordId: string,
+    ): Promise<{ id: string; deleted: true }> =>
+      this.request(
+        "DELETE",
+        `${chunkPath(kbId, chunkId)}/keywords/${encodeURIComponent(keywordId)}`,
+      ),
+  };
+
+  readonly keywords = {
+    /** `GET /v1/kbs/:id/keywords`. */
+    list: async (kbId: string, query: ListKeywordsQuery = {}): Promise<Keyword[]> => {
+      const answer = await this.request<ListKeywordsResponse>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/keywords`,
+        { query: query as Record<string, string | number | boolean | undefined> },
+      );
+      return answer.keywords;
+    },
+
+    /** `PUT /v1/kbs/:id/keywords`. Create, or return the canonical row. */
+    put: (kbId: string, input: PutKeywordRequest): Promise<Keyword> =>
+      this.request<Keyword>("PUT", `/v1/kbs/${encodeURIComponent(kbId)}/keywords`, {
+        json: input,
+      }),
+
+    /** `DELETE /v1/kbs/:id/keywords/:keywordId`. */
+    delete: (kbId: string, keywordId: string): Promise<DeleteKeywordResponse> =>
+      this.request<DeleteKeywordResponse>(
+        "DELETE",
+        `/v1/kbs/${encodeURIComponent(kbId)}/keywords/${encodeURIComponent(keywordId)}`,
+      ),
+
+    /** `POST /v1/kbs/:id/extract-keywords`. Enqueues; does not extract. */
+    extract: (kbId: string, input: ExtractKeywordsRequest): Promise<ExtractKeywordsResponse> =>
+      this.request<ExtractKeywordsResponse>(
+        "POST",
+        `/v1/kbs/${encodeURIComponent(kbId)}/extract-keywords`,
+        { json: input },
+      ),
+
+    /** `PUT …/chunks/:chunkId/keywords` — attach one keyword by hand. */
+    attachToChunk: (
+      kbId: string,
+      documentId: string,
+      chunkId: string,
+      input: AttachChunkKeywordRequest,
+    ): Promise<ChunkKeywordResponse> =>
+      this.request<ChunkKeywordResponse>(
+        "PUT",
+        `${documentPath(kbId, documentId)}/chunks/${encodeURIComponent(chunkId)}/keywords`,
+        { json: input },
+      ),
+
+    /** `DELETE …/chunks/:chunkId/keywords/:keywordId`. */
+    detachFromChunk: (
+      kbId: string,
+      documentId: string,
+      chunkId: string,
+      keywordId: string,
+    ): Promise<{ id: string; deleted: true }> =>
+      this.request(
+        "DELETE",
+        `${documentPath(kbId, documentId)}/chunks/${encodeURIComponent(chunkId)}` +
+          `/keywords/${encodeURIComponent(keywordId)}`,
+      ),
+  };
+
+  readonly clusters = {
+    /** `GET /v1/kbs/:id/clusters`. Centroids only when asked for. */
+    list: (kbId: string, query: ListClustersQuery = {}): Promise<ListClustersResponse> =>
+      this.request<ListClustersResponse>("GET", `/v1/kbs/${encodeURIComponent(kbId)}/clusters`, {
+        query: query as Record<string, string | number | boolean | undefined>,
+      }),
+
+    /** `GET /v1/kbs/:id/clustering-status`. */
+    status: (kbId: string): Promise<ClusteringStatus> =>
+      this.request<ClusteringStatus>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/clustering-status`,
+      ),
+
+    /** `POST /v1/kbs/:id/recluster`. Enqueues a fit. */
+    recluster: (kbId: string): Promise<ReclusterResponse> =>
+      this.request<ReclusterResponse>(
+        "POST",
+        `/v1/kbs/${encodeURIComponent(kbId)}/recluster`,
+      ),
+  };
+
+  readonly tags = {
+    /** `GET /v1/kbs/:id/tag-definitions`. */
+    definitions: async (kbId: string): Promise<TagDefinition[]> => {
+      const answer = await this.request<ListTagDefinitionsResponse>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/tag-definitions`,
+      );
+      return answer.definitions;
+    },
+
+    /** `PUT /v1/kbs/:id/tag-definitions` — the bulk create-or-rename. */
+    put: (
+      kbId: string,
+      input: PutTagDefinitionsRequest,
+    ): Promise<PutTagDefinitionsResponse> =>
+      this.request<PutTagDefinitionsResponse>(
+        "PUT",
+        `/v1/kbs/${encodeURIComponent(kbId)}/tag-definitions`,
+        { json: input },
+      ),
+
+    /** `DELETE /v1/kbs/:id/tag-definitions/:tagId`. */
+    delete: (kbId: string, tagId: string): Promise<DeleteTagDefinitionResponse> =>
+      this.request<DeleteTagDefinitionResponse>(
+        "DELETE",
+        `/v1/kbs/${encodeURIComponent(kbId)}/tag-definitions/${encodeURIComponent(tagId)}`,
+      ),
+
+    /** `GET /v1/kbs/:id/tag-usage`. */
+    usage: async (kbId: string): Promise<TagUsage[]> => {
+      const answer = await this.request<TagUsageResponse>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/tag-usage`,
+      );
+      return answer.usage;
+    },
+
+    /** `GET /v1/kbs/:id/next-available-slot?fieldType=…`. `null` when full. */
+    nextAvailableSlot: (
+      kbId: string,
+      fieldType: NextAvailableSlotQuery["fieldType"],
+    ): Promise<NextAvailableSlotResponse> =>
+      this.request<NextAvailableSlotResponse>(
+        "GET",
+        `/v1/kbs/${encodeURIComponent(kbId)}/next-available-slot`,
+        { query: { fieldType } },
+      ),
+  };
+
+  readonly endpoints = {
+    /** `GET /v1/endpoints`. Never carries a key. */
+    get: (): Promise<GetEndpointsResponse> =>
+      this.request<GetEndpointsResponse>("GET", "/v1/endpoints"),
+
+    /** `PUT /v1/endpoints`. The push, keyed by each endpoint's `externalId`. */
+    put: (input: PutEndpointsRequest): Promise<PutEndpointsResponse> =>
+      this.request<PutEndpointsResponse>("PUT", "/v1/endpoints", { json: input }),
+  };
+
+  readonly webhooks = {
+    /** `GET /v1/webhooks`. */
+    get: (): Promise<GetWebhookResponse> =>
+      this.request<GetWebhookResponse>("GET", "/v1/webhooks"),
+
+    /** `PUT /v1/webhooks`. Replaces the hook, ledger and all. */
+    put: (input: PutWebhookRequest): Promise<{ webhook: GetWebhookResponse["webhook"] }> =>
+      this.request("PUT", "/v1/webhooks", { json: input }),
+
+    /** `DELETE /v1/webhooks`. */
+    delete: (): Promise<DeleteWebhookResponse> =>
+      this.request<DeleteWebhookResponse>("DELETE", "/v1/webhooks"),
+  };
+
+  /**
+   * `GET /v1/events` as an async iterator.
+   *
+   * Yields one {@link SearchEvent} per `event:`/`data:` frame and swallows the
+   * heartbeat comments, so a caller writes `for await (const event of
+   * search.events())` and sees only events. Break out of the loop, or abort the
+   * signal, to close the connection.
+   *
+   * In-process on the instance's side: a second Search instance's events do not
+   * arrive here. A delivery that has to survive a disconnect is a webhook.
+   */
+  async *events(options: { signal?: AbortSignal } = {}): AsyncGenerator<SearchEvent> {
+    const url = new URL("/v1/events", this.baseUrl);
+    const headers: Record<string, string> = { accept: "text/event-stream" };
+    if (this.insecureClientId) headers["x-paired-client"] = this.insecureClientId;
+
+    let response;
+    try {
+      response = await undiciRequest(url, {
+        method: "GET",
+        dispatcher: this.agent,
+        headers,
+        // An event stream is idle between events by definition, so the
+        // body timeout that protects an ordinary request is exactly wrong here.
+        headersTimeout: this.timeoutMs,
+        bodyTimeout: 0,
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+    } catch (err) {
+      throw new SearchApiError(
+        "unreachable",
+        0,
+        `GET /v1/events could not be opened: ${err instanceof Error ? err.message : String(err)}`,
+        undefined,
+        { cause: err },
+      );
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      const text = await response.body.text();
+      const failure = (safeJson(text) ?? {}) as { code?: unknown; message?: unknown };
+      throw new SearchApiError(
+        typeof failure.code === "string" ? failure.code : `http-${response.statusCode}`,
+        response.statusCode,
+        typeof failure.message === "string" ? failure.message : "the event stream was refused",
+      );
+    }
+
+    let buffered = "";
+    for await (const chunk of response.body) {
+      buffered += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
+      let split = buffered.indexOf("\n\n");
+      while (split !== -1) {
+        const frame = buffered.slice(0, split);
+        buffered = buffered.slice(split + 2);
+        const event = parseSseFrame(frame);
+        if (event) yield event;
+        split = buffered.indexOf("\n\n");
+      }
+    }
+  }
+}
+
+/** `/v1/kbs/:kbId/documents/:docId`, escaped. */
+function documentPath(kbId: string, documentId: string): string {
+  return `/v1/kbs/${encodeURIComponent(kbId)}/documents/${encodeURIComponent(documentId)}`;
+}
+
+/** `/v1/kbs/:kbId/chunks/:chunkId`, escaped — the chunk-by-id addressing. */
+function chunkPath(kbId: string, chunkId: string): string {
+  return `/v1/kbs/${encodeURIComponent(kbId)}/chunks/${encodeURIComponent(chunkId)}`;
+}
+
+/** What {@link SearchClient.kbs.ingest} takes: bytes, a URL, or text. */
+export type IngestInput =
+  | (Omit<IngestJsonRequest, "text" | "url"> & {
+      /** The bytes. A `Blob`, a `Buffer`, or any `Uint8Array`. */
+      file: Blob | Uint8Array;
+    })
+  | IngestJsonRequest;
+
+/**
+ * Build the multipart body for a file ingest.
+ *
+ * `FormData` and `Blob` are Node's own globals here (they are undici's, which
+ * is what this client dispatches through), so no polyfill and no dependency:
+ * undici sets the boundary and streams the parts itself.
+ */
+function ingestFormData(
+  input: Omit<IngestJsonRequest, "text" | "url"> & { file: Blob | Uint8Array },
+): FormData {
+  const form = new FormData();
+  const blob =
+    input.file instanceof Blob
+      ? input.file
+      : new Blob([new Uint8Array(input.file)], {
+          type: input.mimeType ?? "application/octet-stream",
+        });
+  form.append("file", blob, input.filename);
+  form.append("filename", input.filename);
+  if (input.documentId !== undefined) form.append("documentId", input.documentId);
+  if (input.mimeType !== undefined) form.append("mimeType", input.mimeType);
+  if (input.metadata !== undefined) form.append("metadata", JSON.stringify(input.metadata));
+  if (input.includedInKb !== undefined) form.append("includedInKb", String(input.includedInKb));
+  for (const [slot, value] of Object.entries(input.tags ?? {})) {
+    if (value !== undefined) form.append(slot, String(value));
+  }
+  return form;
+}
+
+/**
+ * What {@link SearchClient.documents.attachBlob} takes: the bytes, and what to
+ * call them.
+ *
+ * `filename` names the **object** — it is what the bucket key is built from —
+ * and not the document, whose `filename` the attach leaves alone. Required
+ * rather than optional because a key built from a name nobody chose is a key
+ * nobody can recognise in a bucket listing.
+ */
+export type AttachBlobInput = {
+  /** The bytes. A `Blob`, a `Buffer`, or any `Uint8Array`. */
+  file: Blob | Uint8Array;
+  /** The name the storage key is built from. */
+  filename: string;
+  /** Written to `document.mime_type`. Defaults to the blob's own type. */
+  mimeType?: string;
+};
+
+/**
+ * Build the multipart body for a blob attach.
+ *
+ * The same encoding {@link ingestFormData} produces and the same hand-written
+ * `encodeMultipart` writes out — `undici.request` takes no `FormData` — with
+ * three parts instead of twenty: there is nothing to say about bytes that are
+ * already a document's beyond what to call them and what they are.
+ */
+function attachBlobFormData(input: AttachBlobInput): FormData {
+  const form = new FormData();
+  const blob =
+    input.file instanceof Blob
+      ? input.file
+      : new Blob([new Uint8Array(input.file)], {
+          type: input.mimeType ?? "application/octet-stream",
+        });
+  form.append("file", blob, input.filename);
+  form.append("filename", input.filename);
+  if (input.mimeType !== undefined) form.append("mimeType", input.mimeType);
+  return form;
+}
+
+/**
+ * One SSE frame into an event, or `null` for a comment.
+ *
+ * Only `data:` is read: the `event:` line repeats what is inside the payload,
+ * and trusting the payload means one definition of the event rather than two
+ * that can disagree.
+ */
+function parseSseFrame(frame: string): SearchEvent | null {
+  const data = frame
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (data === "") return null;
+  try {
+    return JSON.parse(data) as SearchEvent;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A `FormData` as the bytes of a `multipart/form-data` body.
+ *
+ * Deliberately small: the parts this surface sends are a file and a handful of
+ * short strings. Every part is written with `content-disposition`, a file part
+ * carries its `content-type`, and the boundary is random per request so it
+ * cannot appear in the content by coincidence.
+ */
+async function encodeMultipart(form: FormData): Promise<{ contentType: string; body: Buffer }> {
+  const boundary = `----actana-search-${randomBytes(16).toString("hex")}`;
+  const parts: Buffer[] = [];
+  for (const [name, value] of form.entries()) {
+    parts.push(Buffer.from(`--${boundary}\r\n`));
+    if (typeof value === "string") {
+      parts.push(
+        Buffer.from(`content-disposition: form-data; name="${escapeQuotes(name)}"\r\n\r\n`),
+      );
+      parts.push(Buffer.from(value, "utf8"));
+    } else {
+      const filename = escapeQuotes(value.name ?? name);
+      parts.push(
+        Buffer.from(
+          `content-disposition: form-data; name="${escapeQuotes(name)}"; filename="${filename}"\r\n` +
+            `content-type: ${value.type || "application/octet-stream"}\r\n\r\n`,
+        ),
+      );
+      parts.push(Buffer.from(await value.arrayBuffer()));
+    }
+    parts.push(Buffer.from("\r\n"));
+  }
+  parts.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    body: Buffer.concat(parts),
+  };
+}
+
+/** A quote inside a part name would end the quoted string early. */
+function escapeQuotes(value: string): string {
+  return value.replace(/"/g, "%22").replace(/[\r\n]/g, "");
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}

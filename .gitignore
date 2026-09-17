@@ -9,6 +9,7 @@ dist
 test-results/
 coverage/
 .vite/
+.vendor/
 
 # Local agent scratch
 Temp/

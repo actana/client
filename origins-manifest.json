@@ -635,7 +635,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "0cf3e812c1045f75b4f3b1a7712452a21133ced6d261e41f676ccc87e8a336ed",
       "liftTableRow": "server/rate-limit",
-      "category": "pairing"
+      "category": "pairing",
+      "destSha256": "0cf3e812c1045f75b4f3b1a7712452a21133ced6d261e41f676ccc87e8a336ed"
     },
     {
       "sourceRepo": "actana/control",
@@ -643,6 +644,7 @@
       "destPath": "packages/sdk/src/pairing/server/revocation.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "d066553308a8678f176547ab2a06525e7c33a71a7d6e24aa37c6cd548e0501e0",
+      "destSha256": "bbcbc9473d3081c4bdd9b990f97cfba3d06a77ad9520e7f4e4e630e98d18272f",
       "liftTableRow": "server/revocation",
       "category": "pairing"
     },
@@ -653,7 +655,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "8ffd17376e72abcc6c83ec9b215fd42cafdfe792a78778ed0bb72b3d9f84ed80",
       "liftTableRow": "server/redeem-route",
-      "category": "pairing"
+      "category": "pairing",
+      "destSha256": "9dfdcd255a74c1679a401c1987f1484705e0c7217b1fbc80d0392f7e6fdd2bee"
     },
     {
       "sourceRepo": "actana/control",
@@ -681,7 +684,8 @@
       "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
       "sha256": "97ff29a06af6040a7c939e950203ddf16f6acd13a9441425348b17cdcd55975a",
       "liftTableRow": "stores/postgres",
-      "category": "pairing"
+      "category": "pairing",
+      "destSha256": "943670655f2fffe875a9915089f7bd917cafb84adc48b73008af489a0315eb8a"
     },
     {
       "sourceRepo": "actana/control",
@@ -761,7 +765,8 @@
       "sha256": "ca2f0e851182927d1f6adf49ec5fdf8bcceff845c333fa862f3c83377eccee33",
       "note": "top half of pairing-store.ts",
       "liftTableRow": "stores/json-file",
-      "category": "pairing"
+      "category": "pairing",
+      "destSha256": "06b6a66ca48953814be2b4b5e9cb9a9e8806ea1780de52b1ac5331db1b16ed8f"
     },
     {
       "sourceRepo": "actana/control",
@@ -777,7 +782,8 @@
       "destPath": "packages/sdk/src/core/__tests__/client.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "bdcf548e3f59566a3730b7c7149851529b43fdaa8ccf3a5063d25d6261facbac",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "871140f8f7abf297705750c0660eac5d02029d0c5e502787bca6deb9f50b5d3f"
     },
     {
       "sourceRepo": "actana/control",
@@ -785,7 +791,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-backpressure.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "5ac64acb04968b1884f3a0dbfc2b85871481b27dca3d723c4204b2ee3a558ad6",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "69baa581f28d4b5ed89fe103aa9983ec5d4c7d16dedc7e1113345399e36f81ea"
     },
     {
       "sourceRepo": "actana/control",
@@ -793,7 +800,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-conflict.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "9792972e7b576573493eb89589510969ce71774178f4cec81166d086ac3ec8c6",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "50b563935a15d64503c8e0982695856f47eb64f5845cfd9f1d4d3e6132b49c52"
     },
     {
       "sourceRepo": "actana/control",
@@ -801,7 +809,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-error-codes.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "c7f3b4fe1427f545f5b48435bdd8fb8313f0c99dfeb8544fa9bc1302e314c0fb",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "799af5406324d4626adff0dc772b18bc1157fee5c9865df0b865a8774259ebbb"
     },
     {
       "sourceRepo": "actana/control",
@@ -809,7 +818,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-list-contract.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "863c4ccba084eb5c93d606ecfb9cbccc6f7a2305c5e53c29cd402c5713ff0cf7",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "6ce3af0de193eefff8ee985ed4f9f706469777df2ece75dd99123fd8fdd398cb"
     },
     {
       "sourceRepo": "actana/control",
@@ -817,7 +827,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-mtls.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "eb20b579fbf87915079bc55ab41817c67d11af1d416e62568c529940384df053",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "aabdf7fc676ab9a092006126a0f4b5876c7e7c173f1f047f47e0725fb05463d2"
     },
     {
       "sourceRepo": "actana/control",
@@ -825,7 +836,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-stream-error.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "359a46eb496f3763ae8df76100ef97141ba8ed780a6ba47a24be04cb4d9b77db",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "44524a1f2b2bdd616bb6b8705b4c6cb623c94e85f6ad1c04671241c9b6a1e860"
     },
     {
       "sourceRepo": "actana/control",
@@ -833,7 +845,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-streaming.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "b5168a7437a75ff922d462a404e792005d84b29ee379852567dcabce719f9479",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "ddbee4b164ef805a0431eb960e9ce684c057977bdd49ba13c3436b936774fe3c"
     },
     {
       "sourceRepo": "actana/control",
@@ -841,7 +854,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-surface.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "85de9752da98f5fe1f885841875c0274a36e1bbb9fb3379ba47a7136c84fcdc7",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "783d89ec0f715c4afd8e2fa85e1149f8a7e3b0e569d4edea2d83383b4e8337b9"
     },
     {
       "sourceRepo": "actana/control",
@@ -849,7 +863,8 @@
       "destPath": "packages/sdk/src/core/__tests__/files-unavailable.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "113b29c40a06dfe8ba67fc6d3082b6a7c59ee9889fad560f5d62673372012865",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "2c356e3175a667a07b8022c4da7a15bf13db3468066fab344ebf091578409180"
     },
     {
       "sourceRepo": "actana/control",
@@ -857,7 +872,8 @@
       "destPath": "packages/sdk/src/core/__tests__/link-exec-frames.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "b778528d24f5e577cbc2f775eb562fa047f8bc6c6572ed06bbc1008e205efeec",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "f9d5141508f105a68b80ae5c8f3bba175ee96e206958f3a0bd0e0c856a24ed27"
     },
     {
       "sourceRepo": "actana/control",
@@ -865,7 +881,8 @@
       "destPath": "packages/sdk/src/core/__tests__/link-frames.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7224657be13600ecbff9146e552779dd5cf4b2cd90d0ebd573548ee7a378b856",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "42d3ffa7328a3219f090359d8478938a2e3fa1e6f0d18edb78d1d283f7ae65b1"
     },
     {
       "sourceRepo": "actana/control",
@@ -873,7 +890,8 @@
       "destPath": "packages/sdk/src/core/__tests__/link-mtls.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "8bbf82f9085e4fc883ed4b6e10f254cadb227b77f0a3928dd12af4299a3d9151",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "f53ecd65097e0b415b86d83597bb1c5be04b991ae3fb090d02146d0b18e330f3"
     },
     {
       "sourceRepo": "actana/control",
@@ -889,7 +907,8 @@
       "destPath": "packages/sdk/src/core/__tests__/session.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "045c8a92077e316ff40d8a316bc3e4397ed8896ee6c235352ef534d0c806731c",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "e02a2fb2ec65bb4d3a5d474ea178806aaa3e74d8940934ba6deb82e915ec1ef3"
     },
     {
       "sourceRepo": "actana/control",
@@ -897,7 +916,8 @@
       "destPath": "packages/sdk/src/core/__tests__/durable-client.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "e0b02a7ec7fd2dceaa6eabd94a024bfc7d6d9f6f030b67b2957c8769059b9c49",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "9818b56f9d01b6387ce810fff0b5b7c568a303e620bd3cdeee541a09a83411b7"
     },
     {
       "sourceRepo": "actana/control",
@@ -905,7 +925,8 @@
       "destPath": "packages/sdk/src/__tests__/fake-core-link.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "2b3149eb853cb306e8422c857fec0d1f359f60688bb66f36fdedaaaaadffbc81",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "9307fa4a09ae20e6006b28be3543bb93bf4c9d89152fe39f1f0e8e478542d220"
     },
     {
       "sourceRepo": "actana/control",
@@ -921,7 +942,8 @@
       "destPath": "packages/sdk/src/__tests__/files-error-code-contract.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "db8b83e838bf63c8cf4155886ba1ea878febcca845b40ef2390d05d1c001829c",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "86e4c262e68d6506c74d58ab35ee346ca7c71a67efa6022400c45ada91e37726"
     },
     {
       "sourceRepo": "actana/control",
@@ -929,7 +951,8 @@
       "destPath": "packages/sdk/src/__tests__/files-list-contract.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "34577fafa506bacdb882018455c11b99f0e3757c1b74b4e1c86ad4a60c213f0e",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "3ba74271ba0fe788339eccc32f6e51fc9bfb146315fd2d5ed452e9e64fda962c"
     },
     {
       "sourceRepo": "actana/control",
@@ -937,7 +960,8 @@
       "destPath": "packages/sdk/src/__tests__/files-rig.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7488391ec4b87974ee2234ca48afcbf7348a7ced9e107d8c3c55fba9b74ca3e5",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "d130b4bab6ed47e73126ceed2e950dbe7bcd7f7dedf3ee5fe08182715dc4c5f9"
     },
     {
       "sourceRepo": "actana/control",
@@ -985,7 +1009,8 @@
       "destPath": "packages/sdk/src/core/__tests__/terminal-screen.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "ceec672fe8a33cc587e47732e2beb17dc44ce7529c6fddac5a824dd287a39f3c",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "ceec672fe8a33cc587e47732e2beb17dc44ce7529c6fddac5a824dd287a39f3c"
     },
     {
       "sourceRepo": "actana/control",
@@ -993,7 +1018,8 @@
       "destPath": "packages/sdk/src/core/client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "56bee501097122eedb99ff66244c6f00de866aecfdf4d1e485e319799eb6dd61",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "f14d84a50dc1864b563f3251d88456868672b00137f00139f721fb87eddbc420"
     },
     {
       "sourceRepo": "actana/control",
@@ -1001,7 +1027,8 @@
       "destPath": "packages/sdk/src/core/files-error-codes.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7e3d256694bfbb9d643285603445c03554922b762ce26442e0db3415bf46b93b",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "7e3d256694bfbb9d643285603445c03554922b762ce26442e0db3415bf46b93b"
     },
     {
       "sourceRepo": "actana/control",
@@ -1009,7 +1036,8 @@
       "destPath": "packages/sdk/src/core/files-http.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "4ce5c4d26d10bf4e0083c5180a7b0bd4a03f68c8248dad6edc8a536e9ddc960f",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "aa733bab21ac9787f174ead3a66317a0ca24515782f2ff81695d24c6ffb9faef"
     },
     {
       "sourceRepo": "actana/control",
@@ -1017,7 +1045,8 @@
       "destPath": "packages/sdk/src/core/files.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "1e5bc77abfc49b5f0b6855a5f0586aa97a0cf5e27560851cbba47b57fd3d7186",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "1ad9b0ab39acc6b1a1f2a1aa86b61bbe8b72929fe775b1e7975fbd6d4e8fba10"
     },
     {
       "sourceRepo": "actana/control",
@@ -1025,7 +1054,8 @@
       "destPath": "packages/sdk/src/core/link-cursor-storage.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "5097654bcfa3b3c5ee7aca5edd017f5b4ab85858f56ddd46f926e33a256197e6",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "5097654bcfa3b3c5ee7aca5edd017f5b4ab85858f56ddd46f926e33a256197e6"
     },
     {
       "sourceRepo": "actana/control",
@@ -1033,7 +1063,8 @@
       "destPath": "packages/sdk/src/core/link-frames.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c"
     },
     {
       "sourceRepo": "actana/control",
@@ -1041,7 +1072,8 @@
       "destPath": "packages/sdk/src/core/link-socket.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "f992982e2528470cfef0484703361d06c33ae70e4f11bd814e7bf8f2b7187340",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "f992982e2528470cfef0484703361d06c33ae70e4f11bd814e7bf8f2b7187340"
     },
     {
       "sourceRepo": "actana/control",
@@ -1049,7 +1081,8 @@
       "destPath": "packages/sdk/src/core/link-transport.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "339b0eccf9c43a4c9d04c896e05f117d2d355824eacc134e81bd8f8512d7dcf6",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "bdbd9fe7a0956feb28899c1ac18ff46725f5e91a3280aab4394018d5482c752e"
     },
     {
       "sourceRepo": "actana/control",
@@ -1075,7 +1108,8 @@
       "destPath": "packages/sdk/src/core/project.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7d7e9b076580887ef94f789c5d642c6a4bce161264d31f621028a12647c71aa9",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "53ea9b785a794dc7684bc956dcf36d349c68bc1518700ecfa60062731b113e70"
     },
     {
       "sourceRepo": "actana/control",
@@ -1092,7 +1126,8 @@
       "destPath": "packages/sdk/src/core/session.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "fbcf16ecc04aec7a76fffbe4b1226407aaf6fb4cf3225cd607aa67057f38aee5",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "5b24f507761d76b5fd2e303f17624bccbd174d8c07d80ec8809334c0f98140f6"
     },
     {
       "sourceRepo": "actana/control",
@@ -1100,7 +1135,8 @@
       "destPath": "packages/sdk/src/core/durable-client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "010eb75874d6c2244b89d64a5b0b82200cbf5c7f60f8f3c20691f347159c80b4",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "a8a2299be03b33f47884140d8b6a7e2282521b22498ea8d4b15b8b57f3c82eed"
     },
     {
       "sourceRepo": "actana/control",
@@ -1108,15 +1144,146 @@
       "destPath": "packages/sdk/src/core/terminal-screen.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "f33212065aaea817c47f78f1691e1450f14dc97eccdcaa3bed1490a73414e86f",
+      "category": "sdk",
+      "destSha256": "f33212065aaea817c47f78f1691e1450f14dc97eccdcaa3bed1490a73414e86f"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/client.ts",
+      "destPath": "packages/sdk/src/search/client.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "40d1da0467917895191fbcf0546cb91b98ba5875c9accbd045aed84cfe4cbb0e",
+      "category": "sdk",
+      "note": "T-213: imports T-211 registration-blob"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/errors.ts",
+      "destPath": "packages/sdk/src/search/errors.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "b9ca9dc3b913f9dc4e1577e682592dbb6d734a8d08fa22fc981445e210ad9f10",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts.ts",
+      "destPath": "packages/sdk/src/search/contracts.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "7f02b760a896c8f17fa8c1e1729686cbde79a9bbf9e7ed944488f4f826342877",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/capabilities.ts",
+      "destPath": "packages/sdk/src/search/contracts/capabilities.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "c7cc67f74865cbd3cef5ba57a3c73bc16765a768d0093930a721f9598c11b9e2",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/clusters.ts",
+      "destPath": "packages/sdk/src/search/contracts/clusters.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "e8ea9aafdb0aa55cafeaf1a5106b85def5bab474d184a72143fcc99a29cd579e",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/common.ts",
+      "destPath": "packages/sdk/src/search/contracts/common.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "e7d510059f8c3d996e88f905edf34ea86208b0b608c2b3a0751b5d198cc20743",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/documents.ts",
+      "destPath": "packages/sdk/src/search/contracts/documents.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "279d6f86575a5b2cbac2accc3b1fde081faa8d587f96c09a85c0c870114eb156",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/endpoints.ts",
+      "destPath": "packages/sdk/src/search/contracts/endpoints.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "74b160a789662c2cf6f25dc26e5afeea2f8ca57f0fc6567a04dc4b8bba7b183a",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/events.ts",
+      "destPath": "packages/sdk/src/search/contracts/events.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "dfb221800d8b4c44fed453cb55fff501f98cae6aea29b5b3a0b20516b6544a02",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/kbs.ts",
+      "destPath": "packages/sdk/src/search/contracts/kbs.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "b84ea1932583a4bdcb1c5a665fd06ec3d80cf4765c5ab6d32177ea213b83a2a3",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/keywords.ts",
+      "destPath": "packages/sdk/src/search/contracts/keywords.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "7e292cba4c1bb93eeb77994db21f398b6e9aa52ff22c95b4404c1702e8657168",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/tags.ts",
+      "destPath": "packages/sdk/src/search/contracts/tags.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "1d110dbe4b2c9123fbe605ba29f453fc03db02d063c610ea7a71e152bae5c221",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/webhooks.ts",
+      "destPath": "packages/sdk/src/search/contracts/webhooks.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "c100416bb7f562f870cca13f07bc64f272935de86a98a4837b36881327a80d48",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/contracts/whoami.ts",
+      "destPath": "packages/sdk/src/search/contracts/whoami.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "7d8c6892c0359b04cc94a92f317f4a189bcd8e6a78f91933241183b6c3392117",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/__tests__/client.test.ts",
+      "destPath": "packages/sdk/src/search/__tests__/client.test.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "c345cf447d97543129cba37c18c55b9923a3e2a548eeefdc9b117a65ba3df570",
+      "category": "sdk",
+      "note": "T-213: fromRegistrationBlob + T-211 blob"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/sdk/src/__tests__/contracts.test.ts",
+      "destPath": "packages/sdk/src/search/__tests__/contracts.test.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "551e3e2e0956ff61927b1086d1003de38a47aae899566e268378ded08514f75e",
       "category": "sdk"
     }
   ],
   "stats": {
-    "totalEntries": 133,
+    "totalEntries": 149,
     "pairingLiftTableRows": 14,
     "byCategory": {
       "pairing": 14,
-      "sdk": 43,
+      "sdk": 59,
       "cli": 76
     }
   },
