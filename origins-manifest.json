@@ -36,10 +36,11 @@
     {
       "sourceRepo": "actana/control",
       "sourcePath": "packages/cli/src/__tests__/blob-registry.test.ts",
-      "destPath": "packages/cli/src/__tests__/blob-registry.test.ts",
+      "destPath": "packages/cli/src/registry/__tests__/credentials.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "d6b7817cdaa59a2da20941b8cfbb34fd80aea6791aada377d653fb8cbfeb69b3",
-      "category": "cli"
+      "category": "cli",
+      "note": "T-216: adapted for product-keyed registry and Search import"
     },
     {
       "sourceRepo": "actana/control",
@@ -332,10 +333,20 @@
     {
       "sourceRepo": "actana/control",
       "sourcePath": "packages/cli/src/blob-registry.ts",
-      "destPath": "packages/cli/src/registry/blob-registry.ts",
+      "destPath": "packages/cli/src/registry/credentials.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "74e78e9dd920964072d4283e3c53d198a51b44593f43655930286e033a87f7e4",
-      "category": "cli"
+      "category": "cli",
+      "note": "T-216: merged with shared blob-registry; product-keyed cores/search"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/blob-registry.ts",
+      "destPath": "packages/cli/src/registry/credentials.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b1673e43882fa0c8cf9daa990d289bf8caed926f641a74409cff74cac53021d0",
+      "category": "cli",
+      "note": "T-216: on-disk half merged into credentials.ts with CLI row reader"
     },
     {
       "sourceRepo": "actana/control",
@@ -651,7 +662,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "28e2ceda49e3cf0233ff110bf456dde213595e2c70fb80358479260dfaa92bb4",
       "liftTableRow": "server/preauth-gate",
-      "category": "pairing"
+      "category": "pairing",
+      "destSha256": "2678e96ff3555893c7ee4aafae899709d9841a14c267cc6864c9742cce45457a"
     },
     {
       "sourceRepo": "actana/control",
@@ -1045,7 +1057,8 @@
       "destPath": "packages/sdk/src/pairing/csr.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "147886a21f886b812d37f20a1e1095ac2f8b6023a9424e45cdd24954beb0b4b7",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "2684b8229a381c9148cd61b7a1d6404b007ac2a6e625f6110f77600cc12c16ac"
     },
     {
       "sourceRepo": "actana/control",
@@ -1053,7 +1066,8 @@
       "destPath": "packages/sdk/src/pairing/client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "0f88798bc00086f6cd1096c2a1030860587ac85aad21454ffe99ec28dd014674",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "b735e6a077959edbc3ac55aaff813ce12c81effe8497c1f01da2597b9bbc0fbd"
     },
     {
       "sourceRepo": "actana/control",
@@ -1069,7 +1083,8 @@
       "destPath": "packages/sdk/src/pairing/registration-blob.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "0defbe90c23ae2cb7983085ebd41ac7e96218185a5ee0b7bbf6878f79944ec5a",
-      "category": "sdk"
+      "category": "sdk",
+      "destSha256": "e40c133bbfe26c6c5476f0759bc68f0e4b842a1f4964e7804d2327993880576b"
     },
     {
       "sourceRepo": "actana/control",
@@ -1097,12 +1112,12 @@
     }
   ],
   "stats": {
-    "totalEntries": 132,
+    "totalEntries": 133,
     "pairingLiftTableRows": 14,
     "byCategory": {
       "pairing": 14,
       "sdk": 43,
-      "cli": 75
+      "cli": 76
     }
   },
   "uncertainCliClassification": [

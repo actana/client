@@ -171,17 +171,17 @@ export function createPairingSession<Grant = undefined>(
  * One rule for "expiry" across the two things a Core times out is worth more
  * than the millisecond either way.
  */
-export function isExpired(session: PairingSession, now: number): boolean {
+export function isExpired<Grant>(session: PairingSession<Grant>, now: number): boolean {
   return now > session.expiresAt;
 }
 
 /** Has the cap been reached? A dead session can never be redeemed again. */
-export function isDead(session: PairingSession): boolean {
+export function isDead<Grant>(session: PairingSession<Grant>): boolean {
   return session.attempts >= session.attemptCap;
 }
 
 /** Has the session already been redeemed? Single use is single use. */
-export function isConsumed(session: PairingSession): boolean {
+export function isConsumed<Grant>(session: PairingSession<Grant>): boolean {
   return session.consumedAt !== null;
 }
 
@@ -193,7 +193,7 @@ export function isConsumed(session: PairingSession): boolean {
  * null` would read every one of them as revoked — which would kill every
  * pending session on a Core the moment it upgraded.
  */
-export function isRevoked(session: PairingSession): boolean {
+export function isRevoked<Grant>(session: PairingSession<Grant>): boolean {
   return (session.revokedAt ?? null) !== null;
 }
 
@@ -211,7 +211,7 @@ export type PairingRedeemability =
  *
  * The caller still has to check the code itself; this is only the state gate.
  */
-export function canRedeem(session: PairingSession, now: number): PairingRedeemability {
+export function canRedeem<Grant>(session: PairingSession<Grant>, now: number): PairingRedeemability {
   // Revocation is checked first because it is the operator's own decision, and
   // it is the answer the audit log should carry when several of these are true
   // at once — a session revoked and then left to expire was revoked.
