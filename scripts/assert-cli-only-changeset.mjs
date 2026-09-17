@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -42,9 +43,11 @@ const tempRoot = mkdtempSync(path.join(os.tmpdir(), "actana-changeset-cli-only-"
 try {
   cpSync(path.join(repoRoot, "package.json"), path.join(tempRoot, "package.json"));
   cpSync(path.join(repoRoot, "pnpm-workspace.yaml"), path.join(tempRoot, "pnpm-workspace.yaml"));
-  cpSync(path.join(repoRoot, ".changeset"), path.join(tempRoot, ".changeset"), {
-    recursive: true,
-  });
+  mkdirSync(path.join(tempRoot, ".changeset"), { recursive: true });
+  cpSync(
+    path.join(repoRoot, ".changeset/config.json"),
+    path.join(tempRoot, ".changeset/config.json"),
+  );
   cpSync(path.join(repoRoot, "packages"), path.join(tempRoot, "packages"), {
     recursive: true,
   });

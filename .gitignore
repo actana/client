@@ -1,5 +1,6 @@
 node_modules
 dist
+.pack
 .pnpm-store
 .DS_Store
 *.sw?

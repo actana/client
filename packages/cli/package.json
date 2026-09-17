@@ -19,14 +19,22 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "bin": {
     "actana": "bin/actana.mjs"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "scripts": {
+    "build": "pnpm --filter @actana/sdk run build && tsc -p tsconfig.build.json",
+    "prepack": "pnpm --filter @actana/sdk run build && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

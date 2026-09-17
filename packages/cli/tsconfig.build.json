@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "baseUrl": ".",
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "paths": {
+      "@actana/sdk/pairing": ["../sdk/dist/pairing.d.ts"],
+      "@actana/sdk/pairing/server": ["../sdk/dist/pairing/server/index.d.ts"],
+      "@actana/sdk/pairing/stores/json-file": ["../sdk/dist/pairing/stores/json-file.d.ts"],
+      "@actana/sdk/pairing/stores/postgres": ["../sdk/dist/pairing/stores/postgres.d.ts"],
+      "@actana/sdk/core": ["../sdk/dist/core.d.ts"],
+      "@actana/sdk/search": ["../sdk/dist/search.d.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "src/**/__tests__/**"]
+}

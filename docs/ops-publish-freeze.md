@@ -1,7 +1,7 @@
 # T-221 — Freeze Control's npm publish
 
 **Task:** [T-221](tasks/T-221.html) · modular-split phase 2, wave 1  
-**Status:** **Runbook complete — freeze NOT executed** (no org/npm/GitHub settings were changed in this task)  
+**Status:** **Runbook complete — freeze NOT executed** (no org/npm/GitHub settings were changed in this task). **T-222 local 0.5.0 cut done** in `actana/client` (packable tarballs, changelog, smoke scripts); live `npm view @actana/sdk` / `@actana/cli` remain **`0.4.5`** until a human publishes from client.  
 **Date drafted:** 2026-09-17
 
 ## Goal
