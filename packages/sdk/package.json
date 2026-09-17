@@ -19,6 +19,9 @@
   "exports": {
     "./core": "./src/core.ts",
     "./search": "./src/search.ts",
+    "./pairing/server": "./src/pairing/server/index.ts",
+    "./pairing/stores/json-file": "./src/pairing/stores/json-file.ts",
+    "./pairing/stores/postgres": "./src/pairing/stores/postgres.ts",
     "./*": "./src/*.ts"
   },
   "publishConfig": {

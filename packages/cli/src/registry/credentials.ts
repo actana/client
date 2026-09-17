@@ -69,6 +69,15 @@ export type RegisteredCore = {
   insecureMode: boolean;
 };
 
+/** One row of `actana search ls`: what is known about a Search instance without dialling it. */
+export type RegisteredSearch = {
+  name: string;
+  current: boolean;
+  summary: BlobSummary | null;
+  error: string | null;
+  insecureMode: boolean;
+};
+
 type LegacyCliProfile = {
   blob: string;
   endpoint: string;
@@ -126,6 +135,13 @@ export function ensureCredentialRegistry(paths: RegistryPaths): void {
  */
 export function coreNameError(name: string): string | null {
   return credentialNameError(name);
+}
+
+export function searchNameError(name: string): string | null {
+  if (!name) return "a Search name is required";
+  const err = credentialNameError(name);
+  if (err === null) return null;
+  return err.replace(/^a Core name/, "a Search name");
 }
 
 export function credentialNameError(name: string): string | null {
@@ -247,6 +263,10 @@ export function removeCoreBlob(paths: RegistryPaths, name: string): boolean {
   return removeProductBlob(paths, "core", name);
 }
 
+export function removeSearchBlob(paths: RegistryPaths, name: string): boolean {
+  return removeProductBlob(paths, "search", name);
+}
+
 export function removeProductBlob(
   paths: RegistryPaths,
   product: CredentialProduct,
@@ -320,6 +340,12 @@ export function writeCurrentCore(paths: RegistryPaths, name: string): void {
   writeCurrentPointers(paths, pointers);
 }
 
+export function writeCurrentSearch(paths: RegistryPaths, name: string): void {
+  const pointers = readCurrentJsonFile(paths) ?? { core: null, search: null };
+  pointers.search = name;
+  writeCurrentPointers(paths, pointers);
+}
+
 export function clearCurrentCore(paths: RegistryPaths): void {
   const pointers = readCurrentJsonFile(paths) ?? { core: null, search: null };
   pointers.core = null;
@@ -329,6 +355,12 @@ export function clearCurrentCore(paths: RegistryPaths): void {
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
   }
+}
+
+export function clearCurrentSearch(paths: RegistryPaths): void {
+  const pointers = readCurrentJsonFile(paths) ?? { core: null, search: null };
+  pointers.search = null;
+  writeCurrentPointers(paths, pointers);
 }
 
 export function readRegisteredCore(paths: RegistryPaths, name: string, current: string | null): RegisteredCore {
@@ -369,6 +401,55 @@ export function readRegistry(paths: RegistryPaths): RegisteredCore[] {
   return listCoreNames(paths).map((name) => readRegisteredCore(paths, name, current));
 }
 
+export function readRegisteredSearch(
+  paths: RegistryPaths,
+  name: string,
+  current: string | null,
+): RegisteredSearch {
+  const text = readSearchBlobText(paths, name);
+  const row: RegisteredSearch = {
+    name,
+    current: current === name,
+    summary: null,
+    error: null,
+    insecureMode: false,
+  };
+  const blobPath = productBlobPath(paths, "search", name);
+  try {
+    if (fs.existsSync(blobPath)) {
+      const mode = fs.statSync(blobPath).mode & 0o777;
+      row.insecureMode = (mode & 0o077) !== 0;
+    }
+  } catch {
+    // A file that vanished between the listing and the stat is not a mode problem.
+  }
+  const nameError = searchNameError(name);
+  if (nameError !== null) {
+    row.error = `not a usable Search name (${nameError}) — rename ${name}.txt to reach it`;
+    return row;
+  }
+  if (text === null) {
+    row.error = "no blob stored for this Search instance";
+    return row;
+  }
+  const decoded = decodeRegistrationBlobText(text, "https://");
+  if (!decoded.ok) {
+    row.error = decoded.error;
+    return row;
+  }
+  row.summary = summarizeBlob(decoded.blob);
+  return row;
+}
+
+export function readSearchRegistry(paths: RegistryPaths): RegisteredSearch[] {
+  const current = readCurrentSearch(paths);
+  return listSearchNames(paths).map((name) => readRegisteredSearch(paths, name, current));
+}
+
+export function listUsableSearchNames(paths: RegistryPaths): string[] {
+  return listSearchNames(paths).filter((name) => searchNameError(name) === null);
+}
+
 export function loadCoreBlob(
   paths: RegistryPaths,
   name: string,
@@ -378,6 +459,21 @@ export function loadCoreBlob(
     return { ok: false, error: `no Core named ${name} — \`actana core ls\` lists what this machine knows` };
   }
   const decoded = decodeRegistrationBlobText(text, "wss://");
+  if (!decoded.ok) {
+    return { ok: false, error: `the stored blob for ${name} is unusable: ${decoded.error}` };
+  }
+  return { ok: true, blob: decoded.blob };
+}
+
+export function loadSearchBlob(
+  paths: RegistryPaths,
+  name: string,
+): { ok: true; blob: RegistrationBlob } | { ok: false; error: string } {
+  const text = readSearchBlobText(paths, name);
+  if (text === null) {
+    return { ok: false, error: `no Search instance named ${name} — \`actana search ls\` lists what this machine knows` };
+  }
+  const decoded = decodeRegistrationBlobText(text, "https://");
   if (!decoded.ok) {
     return { ok: false, error: `the stored blob for ${name} is unusable: ${decoded.error}` };
   }

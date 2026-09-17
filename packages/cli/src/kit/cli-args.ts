@@ -25,6 +25,26 @@ export type ParsedArgs = {
   version: boolean;
   /** `--core <name>`, or null when the flag was absent. */
   core: string | null;
+  /** `--search <name>`, or null when the flag was absent. */
+  search: string | null;
+  /** `--external-id <id>` — stable endpoint id for `search endpoint add`. */
+  externalId: string | null;
+  /** `--provider <id>` — catalog provider for `search endpoint add`. */
+  provider: string | null;
+  /** `--template <id>` — request shape for `search endpoint add`. */
+  template: string | null;
+  /** `--model <name>` — provider-side model for `search endpoint add`. */
+  model: string | null;
+  /** `--dimensions <n>` — vector width for an embedding endpoint. Raw. */
+  dimensions: string | null;
+  /** `--base-url <url>` — OpenAI-compatible base URL override. */
+  baseUrl: string | null;
+  /** `--top-k <n>` — how many query matches to return. Raw. */
+  topK: string | null;
+  /** `--keyword-weight <0..1>` — keyword score weight for `search query`. Raw. */
+  keywordWeight: string | null;
+  /** `--key-stdin` — read a provider key from stdin (`search endpoint add`). */
+  keyStdin: boolean;
   /**
    * `--since <eventId>` — where `events tail` starts, overriding the stored
    * cursor. Kept as the raw string: "what the operator typed" and "a number" are
@@ -106,6 +126,7 @@ export type ParsedArgs = {
 /** Flags that take a value. */
 const VALUE_FLAGS = new Set([
   "--core",
+  "--search",
   "--since",
   "--kind",
   "--limit",
@@ -117,6 +138,14 @@ const VALUE_FLAGS = new Set([
   "--fingerprint",
   "--session",
   "--label",
+  "--external-id",
+  "--provider",
+  "--template",
+  "--model",
+  "--dimensions",
+  "--base-url",
+  "--top-k",
+  "--keyword-weight",
 ]);
 
 /** Parse `process.argv.slice(2)`. Never throws; malformed input is reported in the result. */
@@ -128,6 +157,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
     help: false,
     version: false,
     core: null,
+    search: null,
+    externalId: null,
+    provider: null,
+    template: null,
+    model: null,
+    dimensions: null,
+    baseUrl: null,
+    topK: null,
+    keywordWeight: null,
+    keyStdin: false,
     since: null,
     kind: [],
     limit: null,
@@ -176,7 +215,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
         continue;
       }
       if (name === "--core") parsed.core = value;
+      else if (name === "--search") parsed.search = value;
       else if (name === "--since") parsed.since = value;
+      else if (name === "--external-id") parsed.externalId = value;
+      else if (name === "--provider") parsed.provider = value;
+      else if (name === "--template") parsed.template = value;
+      else if (name === "--model") parsed.model = value;
+      else if (name === "--dimensions") parsed.dimensions = value;
+      else if (name === "--base-url") parsed.baseUrl = value;
+      else if (name === "--top-k") parsed.topK = value;
+      else if (name === "--keyword-weight") parsed.keywordWeight = value;
       // Repeatable, unlike the other three: `--kind task:created --kind
       // pty:exit` is a filter somebody will build up, and the alternative — one
       // comma-joined string — puts a second syntax inside a flag value.
@@ -218,6 +266,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
       case "--read-only":
         parsed.readOnly = true;
         break;
+      case "--key-stdin":
+        parsed.keyStdin = true;
+        break;
       case "-h":
       case "--help":
         parsed.help = true;
@@ -232,4 +283,23 @@ export function parseArgs(argv: string[]): ParsedArgs {
   }
 
   return parsed;
+}
+
+/** A positive integer flag, or the reason it is not one. */
+export function parseInteger(raw: string, what: string): { value: number } | { error: string } {
+  if (!/^\d+$/.test(raw.trim())) {
+    return { error: `${what} has to be a whole number — "${raw}" is not` };
+  }
+  const value = Number.parseInt(raw.trim(), 10);
+  if (value <= 0) return { error: `${what} has to be more than zero` };
+  return { value };
+}
+
+/** A number between 0 and 1, or the reason it is not one. */
+export function parseFraction(raw: string, what: string): { value: number } | { error: string } {
+  const value = Number.parseFloat(raw.trim());
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    return { error: `${what} is a number between 0 and 1 — "${raw}" is not` };
+  }
+  return { value };
 }

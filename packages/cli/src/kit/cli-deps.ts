@@ -11,9 +11,9 @@
 // only file that knows about `process`.
 
 import type { CliTerminal } from "./cli-terminal.ts";
+import type { CorePairingPort } from "../core/core-pair.ts";
 import type {
   CoreConnectFn,
-  CorePairingPort,
   CoreProbeFn,
   OpenCoreShellFn,
   OpenProjectFilesFn,
@@ -21,6 +21,9 @@ import type {
   OpenSessionGateway,
 } from "./client-ports.ts";
 import type { ActanaSystem, ReleaseFetcher } from "./machine-ports.ts";
+
+/** Prompts the client nouns may use without pulling in machine modules. */
+export type ClientPrompts = Pick<ActanaSystem, "confirm">;
 
 /** Harness availability as the Core's PATH probe reports it. */
 export type HarnessAvailabilityMap = Record<string, { available: boolean }>;
@@ -55,6 +58,14 @@ export type ClientDeps = {
    * shapes `actana pair new` prints.
    */
   stdoutIsTty: boolean;
+  /** This machine's hostname — default label for `core pair`. */
+  hostname: string;
+  /** Passed through to the pairing SDK for the CSR. */
+  platform: NodeJS.Platform;
+  /** Whether there is a terminal to confirm a fingerprint on. */
+  interactive: boolean;
+  /** Fingerprint confirmation and other client-side prompts. */
+  system: ClientPrompts;
 
   /** How `core status` reaches a Core. */
   probe: CoreProbeFn;

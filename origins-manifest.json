@@ -328,7 +328,9 @@
       "destPath": "packages/cli/src/run-client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "99716ddd54f41c76fd33170b4e14b738c750787f85d2dfc7071b9b63cd751ee4",
-      "category": "cli"
+      "destSha256": "2b9148a25892e42729fa7ec8dbb7ed70511fe045545e7fda25fa66a55ab3aab7",
+      "category": "cli",
+      "note": "T-217: client nouns only; machine dispatch deferred"
     },
     {
       "sourceRepo": "actana/control",
@@ -538,7 +540,9 @@
       "destPath": "packages/cli/src/core/orchestration-skill-payload.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "2d9810b4451306dd6919e5d0d188a5edf58485634bb21777a65767179fdc5f5a",
-      "category": "cli"
+      "destSha256": "3179bc1a623ae91e69374fcd4ed492a6c5937062c55621d30351b92ec9c3c8f1",
+      "category": "cli",
+      "note": "T-217: payload in packages/cli/data/orchestration-skill.json"
     },
     {
       "sourceRepo": "actana/control",
@@ -627,6 +631,15 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "6965547568c9dff24aeb1e2186ba4ce48a09e77ed566d41258f608a74d44c728",
       "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/client",
+      "sourcePath": "packages/sdk/src/pairing/server/index.ts",
+      "destPath": "packages/sdk/src/pairing/server/index.ts",
+      "commit": "848269c",
+      "sha256": "5b26eb456616ad624fe926b1b3c1eacbea8957d90008a68ff5adb22832f6bceb",
+      "category": "pairing",
+      "note": "T-210: createPairing composition root — client-original"
     },
     {
       "sourceRepo": "actana/control",
@@ -1276,15 +1289,60 @@
       "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
       "sha256": "551e3e2e0956ff61927b1086d1003de38a47aae899566e268378ded08514f75e",
       "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/cli/src/pair-command.ts",
+      "destPath": "packages/cli/src/search/pair-command.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "5b8be0d732f0762939dbdf3bdafec8071de0b9bd2958868566022f60936ea25c",
+      "category": "cli",
+      "note": "T-218: client redeem half only; registry + @actana/sdk/search"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/cli/src/kb-command.ts",
+      "destPath": "packages/cli/src/search/kb-command.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "de4be8a861e3e784761da092affbe12445cb6fc927b0ea8dc268ff6acf3b85c0",
+      "category": "cli",
+      "note": "T-218: --search registry pointer; SDK list/query shapes"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/cli/src/endpoint-command.ts",
+      "destPath": "packages/cli/src/search/endpoint-command.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "d853ec7dde991d53a92d261a581d528c750ac9f9517b521f363b7b912e0e42aa",
+      "category": "cli",
+      "note": "T-218: --search registry pointer"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/cli/src/pair-command.test.ts",
+      "destPath": "packages/cli/src/search/__tests__/pair-command.test.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "11f8974f6fd48b9cf021dd748c05cdf23009bf5dea92c0015894686ea2c55308",
+      "category": "cli",
+      "note": "T-218: client pair cases only (admin/socket tests dropped)"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/cli/src/endpoint-command.test.ts",
+      "destPath": "packages/cli/src/search/__tests__/endpoint-command.test.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "4513dce5571b04b91c415d671aa09e0b82c2e21c11ddc848987579dc5e0a69b9",
+      "category": "cli",
+      "note": "T-218: runSearchCommand + product registry"
     }
   ],
   "stats": {
-    "totalEntries": 149,
-    "pairingLiftTableRows": 14,
+    "totalEntries": 155,
+    "pairingLiftTableRows": 15,
     "byCategory": {
-      "pairing": 14,
+      "pairing": 15,
       "sdk": 59,
-      "cli": 76
+      "cli": 81
     }
   },
   "uncertainCliClassification": [

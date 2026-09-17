@@ -164,6 +164,9 @@ export function createPostgresPairingStore<Grant = unknown>(
   return new PostgresPairingStore<Grant>(pool, options);
 }
 
+/** @see {@link createPostgresPairingStore} */
+export const postgresStore = createPostgresPairingStore;
+
 class PostgresPairingStore<Grant> implements PairingStore<Grant> {
   private readonly pool: PgPool;
   private readonly schema: string;

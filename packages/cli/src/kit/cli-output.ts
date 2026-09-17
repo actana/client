@@ -30,3 +30,36 @@ export function formatTable(header: string[], rows: string[][]): string[] {
 export function formatJson(payload: unknown): string {
   return JSON.stringify(payload, null, 2);
 }
+
+/** An ISO timestamp as a local wall clock, for a line a person reads. */
+export function absoluteTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString();
+}
+
+/** `in 4m 58s`, `12s ago`, `now`. */
+export function relativeTime(iso: string, now: number = Date.now()): string {
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return "";
+  const delta = at - now;
+  const seconds = Math.round(Math.abs(delta) / 1000);
+  if (seconds === 0) return "now";
+  const parts: string[] = [];
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  const rest = seconds % 60;
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (rest && parts.length < 2) parts.push(`${rest}s`);
+  const span = parts.slice(0, 2).join(" ");
+  return delta >= 0 ? `in ${span}` : `${span} ago`;
+}
+
+/** `—` for an absent value, so a table never has a hole in it. */
+export function orDash(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}

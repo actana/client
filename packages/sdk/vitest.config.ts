@@ -12,6 +12,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      "@actana/sdk/pairing/server": path.join(sdkSrc, "pairing/server/index.ts"),
+      "@actana/sdk/pairing/stores/json-file": path.join(sdkSrc, "pairing/stores/json-file.ts"),
+      "@actana/sdk/pairing/stores/postgres": path.join(sdkSrc, "pairing/stores/postgres.ts"),
       // Control's Core imports the SDK by its old flat paths; map them to /core.
       "@actana/sdk/core-link-frames": path.join(sdkSrc, "core/link-frames.ts"),
       "@actana/sdk/core-files-error-codes": path.join(sdkSrc, "core/files-error-codes.ts"),

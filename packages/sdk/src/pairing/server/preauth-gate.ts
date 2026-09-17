@@ -42,6 +42,39 @@ export const CLIENT_CERT_REFUSAL_CODE = "client-certificate-required";
 /** Paths that may be served without a verified client certificate. */
 export const DEFAULT_OPEN_PATHS: readonly string[] = [PAIRING_REDEEM_PATH];
 
+/** One route that may be served without a verified client certificate. */
+export type OpenPathSpec = string | { method: string; path: string };
+
+/** Pathname strings from an open-path list — for TLS predicates that lack a method. */
+export function openPathnames(openPaths: readonly OpenPathSpec[]): string[] {
+  const names: string[] = [];
+  for (const entry of openPaths) {
+    names.push(typeof entry === "string" ? entry : entry.path);
+  }
+  return names;
+}
+
+/**
+ * Exact match on method and pathname when an entry names both; pathname-only
+ * entries match any method on that path.
+ */
+export function isOpenPath(method: string, pathname: string, openPaths: readonly OpenPathSpec[]): boolean {
+  const verb = method.toUpperCase();
+  for (const entry of openPaths) {
+    if (typeof entry === "string") {
+      if (entry === pathname) return true;
+      continue;
+    }
+    if (entry.path === pathname && entry.method.toUpperCase() === verb) return true;
+  }
+  return false;
+}
+
+/** Build a pathname predicate from an open-path list (method-agnostic). */
+export function openPathPredicateFrom(openPaths: readonly OpenPathSpec[]): PreAuthPathPredicate {
+  return openPathPredicate(openPathnames(openPaths));
+}
+
 /**
  * Human-readable refusal for a connection that presented no verified client
  * certificate on a route outside the open set.
