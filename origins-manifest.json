@@ -1,0 +1,1114 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-17",
+  "task": "T-003",
+  "description": "Origin baseline for the actana/client lift. One Control commit pins all Control-sourced files; Search postgres adapter pinned separately.",
+  "origins": {
+    "actana/control": {
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "remote": "control/main",
+      "repo": "https://github.com/actana/control"
+    },
+    "actana/search": {
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "branch": "beta/0.1.0",
+      "repo": "https://github.com/actana/search",
+      "note": "Only stores/postgres row (pairing-store.ts)"
+    }
+  },
+  "entries": [
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/actana-cli.test.ts",
+      "destPath": "packages/cli/src/__tests__/actana-cli.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c2cabdc323131ca3c3a5ac112fc179407879ec61f170bee129e08260478ad445",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/bin-shim.test.ts",
+      "destPath": "packages/cli/src/__tests__/bin-shim.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "9d654f32351fc1eba52de8d198f86d298fb4325789eeba44c97a4d92e9ae9292",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/blob-registry.test.ts",
+      "destPath": "packages/cli/src/__tests__/blob-registry.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d6b7817cdaa59a2da20941b8cfbb34fd80aea6791aada377d653fb8cbfeb69b3",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/cli-harness.ts",
+      "destPath": "packages/cli/src/__tests__/cli-harness.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "eed1ec42e88155baaa409318680f550567129828389a3d07dc5f29e38bd69a6d",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/cli-terminal.test.ts",
+      "destPath": "packages/cli/src/__tests__/cli-terminal.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "bed4b5573c34e5ff4f1409046291dfd15bc68a02a38436366ead1ed986e320d2",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-command.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-command.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "1dc626429ff49c30816f7ab07b92aaf4f65bd0142140a01a6ecd98dc3fdbe111",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-exec-live.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-exec-live.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "16dab69473810e2b1a813d9be05898ece1a2f3480f3e954a6323586f1f43e397",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-exec.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-exec.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "451772a765efd084c2a8edb4424b538e873d2ab370d99b3555c55cc2132f6571",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-pair.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-pair.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c571b872480eec7dfe0ef8879c844640c3a33339a0c0995661bf26eb127b4295",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-resolution.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-resolution.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "61d057f144947c8e0285dc449519dc30e34b153e8515d1609e7a25987d43364e",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-shell-live.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-shell-live.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c779565f757ae4e34a967de623d83a123c183c455218643088af8eacec37722c",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/core-shell.test.ts",
+      "destPath": "packages/cli/src/__tests__/core-shell.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0d0e93fd306f9351fc15a50c1ad1f9573766f7ea467032a726f40e511182f31c",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/cursor-cli-drivable.test.ts",
+      "destPath": "packages/cli/src/__tests__/cursor-cli-drivable.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d382af83ff3cf18ee5852689a7c12d6729edc8537c843a3ab96e50e6f3e7041f",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/event-cursor-file.test.ts",
+      "destPath": "packages/cli/src/__tests__/event-cursor-file.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "742ebde0b1f91e11ad711694c0222a726b4edcc4ccff64fded4857bd06d101e2",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/events-command.test.ts",
+      "destPath": "packages/cli/src/__tests__/events-command.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "cf712ae9ec551fcf3ccae5c32237ba52136298152785a4b1ebeb09fa1c6770f0",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/events-tail-cursor.test.ts",
+      "destPath": "packages/cli/src/__tests__/events-tail-cursor.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b2cd43c1f808c98f6b20ce306a4aa8f84f3f3f0ba5caca5b73216f9241c23abe",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/harness-command.test.ts",
+      "destPath": "packages/cli/src/__tests__/harness-command.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "1b0d0b1dbf9581f6dbf14daee2b3697766fe22c6bdfaea9d2ceb1548bbeb87df",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/harness-resume.test.ts",
+      "destPath": "packages/cli/src/__tests__/harness-resume.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "288aecf71aa81b4554ee8d2ff6c1c8781d541768a1127ecb733fe96b52b59e95",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/harness-skills.test.ts",
+      "destPath": "packages/cli/src/__tests__/harness-skills.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "417e0fe37271f335bfa75682e76a822a5af255a0ec8d7d06bb0f69ecd4eeba4d",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/live-core.test.ts",
+      "destPath": "packages/cli/src/__tests__/live-core.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e613fa07267bd5329b2760a0bdc39e43fdc74728500971be40ee4ce699db69ce",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/local-tar.test.ts",
+      "destPath": "packages/cli/src/__tests__/local-tar.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "79ee4ea9408d9aaa67019fcb7d45ccc8c99acc206b2b7fb41431144f7c3af49f",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/module-halves.ts",
+      "destPath": "packages/cli/src/__tests__/module-halves.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5dd2e3abdb96254f0ca683859969ec0365b8c018dddd5bb80e64a2ae8f95f047",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/never-logs-a-blob.test.ts",
+      "destPath": "packages/cli/src/__tests__/never-logs-a-blob.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e6990af495628bdae8a1a546405605ab8a20b74fe504be9fb6c79944fa103ba0",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/no-local-escape.test.ts",
+      "destPath": "packages/cli/src/__tests__/no-local-escape.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e8a5f4f99f4b807300b785f217e72ab988433c682768e7289b6f526983c3a7d5",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/no-prompt-timing.test.ts",
+      "destPath": "packages/cli/src/__tests__/no-prompt-timing.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e02a137ff90a60132f2656af6c0cab7f1590b8dc4ca736972a00187469ebdc42",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-command.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-command.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "385b02caf0e79d2dcbacb0c809eebbb0f0a30312afbdfaf61165465d889f0327",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-cp.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-cp.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0c817bdfae7be2b25d951a1c0d3efff485bd9a8d7273259cdc6af42f0b82bd43",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-file-target.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-file-target.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "25ebf9b43c6c3a5186d1de164511c8b370f0314f8957cd519eb5d6a9dfc0dee7",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-files-gateway.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-files-gateway.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "ed45003c293874d340d16fd9f2042fc1e9441b9fb5a6eb1e0c20c4dd3074de41",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-files-live.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-files-live.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "fad3f24b9886b508c3125ed9a38a41c1cf46688b70c3ac68a7fce8a8470f2717",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-files-ls.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-files-ls.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d5c2c9dd027e5218222915547a0610c775945445d1d3b1f63943244d7d997e20",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/project-harness-live.test.ts",
+      "destPath": "packages/cli/src/__tests__/project-harness-live.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "6053ebbedc15594eee79731486e8f0bd4d887ec790b2c25814da3b923b2fd0ac",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/registration-blob-file.test.ts",
+      "destPath": "packages/cli/src/__tests__/registration-blob-file.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c4cd1075938b8c6d2301d89ba847aa4a06804956c91d5e63842fd3769ef256a6",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/session-attach-live.test.ts",
+      "destPath": "packages/cli/src/__tests__/session-attach-live.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0f9f38ac546b50e13093c30050f99b8bdbf610d09fa7446f27f312dc15d550f9",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/session-attach.test.ts",
+      "destPath": "packages/cli/src/__tests__/session-attach.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c9f123374bc36057ce0ec051e5c5524fae8de90b660593ba0bf717b61171cc89",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/session-command.test.ts",
+      "destPath": "packages/cli/src/__tests__/session-command.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "fffa3c801925fb012e2a49e6df04a9086360283e0c937b40dc3d3bb9ee32fa9e",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/__tests__/skill-verbs-exist.test.ts",
+      "destPath": "packages/cli/src/__tests__/skill-verbs-exist.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "465afd075b453887b58eda8a127613cd56fdc2c8ab3d43db6142fee72f75b58b",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/actana-cli-entry.ts",
+      "destPath": "packages/cli/src/entry.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b6c9a2b6a744b519c6c13a9d99e328eaddae59c60b370a467cf2a298379f818d",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/actana-cli.ts",
+      "destPath": "packages/cli/src/run-client.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "99716ddd54f41c76fd33170b4e14b738c750787f85d2dfc7071b9b63cd751ee4",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/blob-registry.ts",
+      "destPath": "packages/cli/src/registry/blob-registry.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "74e78e9dd920964072d4283e3c53d198a51b44593f43655930286e033a87f7e4",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/cli-args.ts",
+      "destPath": "packages/cli/src/kit/cli-args.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "a40136f7c8af35f738a98941da1f1530d81b789cd49671416f06a745046d6a9d",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/cli-deps.ts",
+      "destPath": "packages/cli/src/kit/cli-deps.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "79cb0244c959f88f49b96e193166ae1018ee00cde9164c6925f1adb633d1d5a6",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/cli-frame.ts",
+      "destPath": "packages/cli/src/kit/cli-frame.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7ca283e579e9e6700b85ac0f6035ca95f3df353c7de7a2d003d5047e2fdc5095",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/cli-output.ts",
+      "destPath": "packages/cli/src/kit/cli-output.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c6eeb395c10a747a4068a545496c9025142fee090d8d5a831d519194d8cdaafd",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/cli-terminal.ts",
+      "destPath": "packages/cli/src/kit/cli-terminal.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "9fdcc4fae2d790aeb4d6987f751e031b24d603e212636fe267aef5fe7e6fb205",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-command.ts",
+      "destPath": "packages/cli/src/core/core-command.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "bc5999f40338bf424ec62e8117d08ab7d7e8dbd30f99336427757dc4bcb1d16c",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-connection.ts",
+      "destPath": "packages/cli/src/core/core-connection.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "97b544f00f45de3019fbeb6da4009a5a5e60f6b7871cb5fb0b931de8606f27e1",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-exec.ts",
+      "destPath": "packages/cli/src/core/core-exec.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "ec4d665b23e29205f4e87ace940d0abaa9d21fcf8dde17c81b8cda44ce996392",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-pair-results.ts",
+      "destPath": "packages/cli/src/core/core-pair-results.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7ee824b272d5f17140ee2674e3507d7492675aa511349b65c808d459a7b98fb0",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-pair.ts",
+      "destPath": "packages/cli/src/core/core-pair.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "a529daab25a6a195f955b89b20912f2de7176c5f89f14ed8c95476b04994b91a",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-probe.ts",
+      "destPath": "packages/cli/src/core/core-probe.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "646ef66d0fbcfc93de91f0e013128e20d14e39b6c0fae3c4f1061db42fc28015",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-resolution.ts",
+      "destPath": "packages/cli/src/core/core-resolution.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "4c7143a65348ea39294099c40cbaf28f3efa74871fe9c7a999d884aad45331d8",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-shell-channel.ts",
+      "destPath": "packages/cli/src/core/core-shell-channel.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "9c7fbad7b34a55d53147d811f315f14a47f7b922890bb199842ce5f893431210",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/core-shell.ts",
+      "destPath": "packages/cli/src/core/core-shell.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "19e090672a2129a576693f05a674521e68ff72d891da68abf51a71db5988dc08",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/event-cursor-file.ts",
+      "destPath": "packages/cli/src/core/event-cursor-file.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0761650eddf053a6efd2d8a6bf647165ae5e042a87aec78e55bd1ad9343061d4",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/event-tip.ts",
+      "destPath": "packages/cli/src/core/event-tip.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "bc47d778c7de4ab91fbb6b2e5401420c02a0e35fa8effa855413e1f921d0abd1",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/events-command.ts",
+      "destPath": "packages/cli/src/core/events-command.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "54f957085208a8e6d31d7b61e1acb68c343fee702d9325d604de7b1728afabef",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/exit-codes.ts",
+      "destPath": "packages/cli/src/kit/exit-codes.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b7838804835a3d12960a18f9acc4a903d5dd9809a097d49f5ac57dec15b53d1a",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/harness-command.ts",
+      "destPath": "packages/cli/src/core/harness-command.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d5dfb0749937379af9c68f4bbf4f2d6b0af946f8f5c99c3a9fab9a83cd43e930",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/harness-resume.ts",
+      "destPath": "packages/cli/src/core/harness-resume.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5b42f856f575cd66825730c47997c6220bbc83dbe6ae3d79b44a4c5f319ecddd",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/harness-skill-targets.ts",
+      "destPath": "packages/cli/src/core/harness-skill-targets.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "04463f8be3bde188b8ea36c8f465fc9abd565434ccfc079c92acbad5b407bbd4",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/local-tar.ts",
+      "destPath": "packages/cli/src/core/local-tar.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "9efa78b722527b42818c07ef5d49d7aea45182798b260f4ffa249b93afff74f5",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/orchestration-skill-install.ts",
+      "destPath": "packages/cli/src/core/orchestration-skill-install.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "701174d205be11752b97d4c3673e6561efd5c6c31a16afb638510e83f12e9e3c",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/orchestration-skill-payload.ts",
+      "destPath": "packages/cli/src/core/orchestration-skill-payload.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "2d9810b4451306dd6919e5d0d188a5edf58485634bb21777a65767179fdc5f5a",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/orchestration-skill.ts",
+      "destPath": "packages/cli/src/core/orchestration-skill.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "30c05f5bc25208d6ad436294cea10cd5d22ca24ff8a498f0e4fe37aa79eac711",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/project-command.ts",
+      "destPath": "packages/cli/src/core/project-command.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d8a103e087c767a10e81d03ac2a8987698f52e97ccfb15a8238ef8329c0deb9c",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/project-cp.ts",
+      "destPath": "packages/cli/src/core/project-cp.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "62a509ee0f646b61fbd0d8f71251f696c7cca1caaf3a794675b5d11335111dc8",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/project-file-target.ts",
+      "destPath": "packages/cli/src/core/project-file-target.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "a918528ddabd06cf025c64ec5dab39a8fc33c7f5f92184f8ab41576ca9f57768",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/project-files-gateway.ts",
+      "destPath": "packages/cli/src/core/project-files-gateway.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "451b08d840f9c765307cc0e52dff0c72a8472463d53cdc36fdc1e76028321afb",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/project-files-ls.ts",
+      "destPath": "packages/cli/src/core/project-files-ls.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "94fc2ddd86254b0386f6f5fdeef8fd133e3611a07fc4240c5f524dc51f9b2e97",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/registration-blob-file.ts",
+      "destPath": "packages/cli/src/registry/registration-blob-file.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5b5f6f63fd4a2a707d829a1754d050a03e461a39be501626151ed8fc5bce90b4",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/session-attach-channel.ts",
+      "destPath": "packages/cli/src/core/session-attach-channel.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "73e4fb0ea1d165cade5b1f21e2487686b1d7e5c1cefa579a571b3d9133fa78ac",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/session-attach.ts",
+      "destPath": "packages/cli/src/core/session-attach.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "3dfe05594735c99646cb9ea3778498ab4639582da1448088c2323cb1afa28283",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/session-command.ts",
+      "destPath": "packages/cli/src/core/session-command.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "508f4e709281a98f279b71268ad466c2babd756afa3e46d33cbfb02800537715",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/cli/src/session-gateway.ts",
+      "destPath": "packages/cli/src/core/session-gateway.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "6965547568c9dff24aeb1e2186ba4ce48a09e77ed566d41258f608a74d44c728",
+      "category": "cli"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/core/src/core-pairing-rate-limit.ts",
+      "destPath": "packages/sdk/src/pairing/server/rate-limit.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0cf3e812c1045f75b4f3b1a7712452a21133ced6d261e41f676ccc87e8a336ed",
+      "liftTableRow": "server/rate-limit",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/core/src/core-pairing-revocation.ts",
+      "destPath": "packages/sdk/src/pairing/server/revocation.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "d066553308a8678f176547ab2a06525e7c33a71a7d6e24aa37c6cd548e0501e0",
+      "liftTableRow": "server/revocation",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/core/src/core-pairing-routes.ts",
+      "destPath": "packages/sdk/src/pairing/server/redeem-route.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "8ffd17376e72abcc6c83ec9b215fd42cafdfe792a78778ed0bb72b3d9f84ed80",
+      "liftTableRow": "server/redeem-route",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/core/src/core-preauth-gate.ts",
+      "destPath": "packages/sdk/src/pairing/server/preauth-gate.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "28e2ceda49e3cf0233ff110bf456dde213595e2c70fb80358479260dfaa92bb4",
+      "liftTableRow": "server/preauth-gate",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-pairing-wire.ts",
+      "destPath": "packages/sdk/src/pairing/wire.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e2c9e9fa4540c7b417d084fb572269734f19249aa09c17c0da916772a6fbe930",
+      "liftTableRow": "wire",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/search",
+      "sourcePath": "packages/search/src/pairing/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/stores/postgres.ts",
+      "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
+      "sha256": "97ff29a06af6040a7c939e950203ddf16f6acd13a9441425348b17cdcd55975a",
+      "liftTableRow": "stores/postgres",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/core-cert-material.ts",
+      "destPath": "packages/sdk/src/pairing/cert-material.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "fc72fc23ac8732a4232b859010cb7263871a51fb72b5797d39040281f2a642f9",
+      "liftTableRow": "cert-material",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/core-link-bearer.ts",
+      "destPath": "packages/sdk/src/pairing/bearer.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "4991d415f0ec9232a3883e9c93b4973760c011b51c37ebc5f1c2b3dd823a76cb",
+      "liftTableRow": "bearer",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/core-material-store.ts",
+      "destPath": "packages/sdk/src/pairing/material-store.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "8e4c49f45160acef256371d86b8450619f40f78f2ccc29e41155ca8fa756e74f",
+      "liftTableRow": "material-store",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-audit.ts",
+      "destPath": "packages/sdk/src/pairing/audit.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "158db204d840b7688b12d7a94457588b5de4845bec6bf98ed5607eda54ee647f",
+      "liftTableRow": "audit",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-code.ts",
+      "destPath": "packages/sdk/src/pairing/code.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "2b5da99c45a3598da1d17d7c5d3bad6947853e8e46e0054d88d18f584cf7a830",
+      "liftTableRow": "code",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-session.ts",
+      "destPath": "packages/sdk/src/pairing/session.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "76d02db031585f96a8811ca85491a640474ddc681f3c09d8861fe5656360521b",
+      "liftTableRow": "session",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/digest.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "ca2f0e851182927d1f6adf49ec5fdf8bcceff845c333fa862f3c83377eccee33",
+      "note": "bottom half of pairing-store.ts",
+      "liftTableRow": "digest",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/shared/src/pairing-store.ts",
+      "destPath": "packages/sdk/src/pairing/stores/json-file.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "ca2f0e851182927d1f6adf49ec5fdf8bcceff845c333fa862f3c83377eccee33",
+      "note": "top half of pairing-store.ts",
+      "liftTableRow": "stores/json-file",
+      "category": "pairing"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/client-id-reclaim.test.ts",
+      "destPath": "packages/sdk/src/__tests__/client-id-reclaim.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "f925c976a94341b79cd87a0553e7aeee75a881a9dbe41cec5625f89b3fe50278",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-client.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/client.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "bdcf548e3f59566a3730b7c7149851529b43fdaa8ccf3a5063d25d6261facbac",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-backpressure.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-backpressure.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5ac64acb04968b1884f3a0dbfc2b85871481b27dca3d723c4204b2ee3a558ad6",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-conflict.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-conflict.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "9792972e7b576573493eb89589510969ce71774178f4cec81166d086ac3ec8c6",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-error-codes.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-error-codes.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "c7f3b4fe1427f545f5b48435bdd8fb8313f0c99dfeb8544fa9bc1302e314c0fb",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-list-contract.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-list-contract.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "863c4ccba084eb5c93d606ecfb9cbccc6f7a2305c5e53c29cd402c5713ff0cf7",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-mtls.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-mtls.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "eb20b579fbf87915079bc55ab41817c67d11af1d416e62568c529940384df053",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-stream-error.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-stream-error.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "359a46eb496f3763ae8df76100ef97141ba8ed780a6ba47a24be04cb4d9b77db",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-streaming.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-streaming.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b5168a7437a75ff922d462a404e792005d84b29ee379852567dcabce719f9479",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-surface.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-surface.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "85de9752da98f5fe1f885841875c0274a36e1bbb9fb3379ba47a7136c84fcdc7",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-files-unavailable.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/files-unavailable.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "113b29c40a06dfe8ba67fc6d3082b6a7c59ee9889fad560f5d62673372012865",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-link-exec-frames.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/link-exec-frames.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b778528d24f5e577cbc2f775eb562fa047f8bc6c6572ed06bbc1008e205efeec",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-link-frames.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/link-frames.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7224657be13600ecbff9146e552779dd5cf4b2cd90d0ebd573548ee7a378b856",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-link-mtls.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/link-mtls.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "8bbf82f9085e4fc883ed4b6e10f254cadb227b77f0a3928dd12af4299a3d9151",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-pairing.test.ts",
+      "destPath": "packages/sdk/src/pairing/__tests__/client.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "b4116363ed540799336c2ef9fedb6b59523e347e0420b2fbd49ec7ca91a45627",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/core-session.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/session.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "045c8a92077e316ff40d8a316bc3e4397ed8896ee6c235352ef534d0c806731c",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/durable-core-client.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/durable-client.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e0b02a7ec7fd2dceaa6eabd94a024bfc7d6d9f6f030b67b2957c8769059b9c49",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/fake-core-link.ts",
+      "destPath": "packages/sdk/src/__tests__/fake-core-link.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "2b3149eb853cb306e8422c857fec0d1f359f60688bb66f36fdedaaaaadffbc81",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/files-capability.test.ts",
+      "destPath": "packages/sdk/src/__tests__/files-capability.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5cbffc19e37434f08d85204f0b3f9e94fa9c3551691b0af65d7cf55bb0c7850b",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/files-error-code-contract.ts",
+      "destPath": "packages/sdk/src/__tests__/files-error-code-contract.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "db8b83e838bf63c8cf4155886ba1ea878febcca845b40ef2390d05d1c001829c",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/files-list-contract.ts",
+      "destPath": "packages/sdk/src/__tests__/files-list-contract.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "34577fafa506bacdb882018455c11b99f0e3757c1b74b4e1c86ad4a60c213f0e",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/files-rig.ts",
+      "destPath": "packages/sdk/src/__tests__/files-rig.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7488391ec4b87974ee2234ca48afcbf7348a7ced9e107d8c3c55fba9b74ca3e5",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/live-core.test.ts",
+      "destPath": "packages/sdk/src/__tests__/live-core.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "314508f9f685ac66987e6c7ee12ddd32be330c910942ffdd2db19a5df9f022ba",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/live-session.test.ts",
+      "destPath": "packages/sdk/src/__tests__/live-session.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "e52c2dc8905fb020d4b4d645874ab79345a40dcea6293fd9e59f005966159b8b",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/multiconnection-gate.test.ts",
+      "destPath": "packages/sdk/src/__tests__/multiconnection-gate.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "641767e522c427020776cd3f81cd4679368fb48ece88c2cbc8b2fd61587d3af5",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/package-boundaries.test.ts",
+      "destPath": "packages/sdk/src/__tests__/package-boundaries.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "af5b83154b296fc625d200d473825003845b070bf3fc655fc59c793cd33fc216",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/plain-node-consumption.test.ts",
+      "destPath": "packages/sdk/src/__tests__/plain-node-consumption.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "dce305eedafdc25a769061c62b06392b8514d57bb13ffedee76402ff15651a35",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/__tests__/terminal-screen.test.ts",
+      "destPath": "packages/sdk/src/core/__tests__/terminal-screen.test.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "ceec672fe8a33cc587e47732e2beb17dc44ce7529c6fddac5a824dd287a39f3c",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-client.ts",
+      "destPath": "packages/sdk/src/core/client.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "56bee501097122eedb99ff66244c6f00de866aecfdf4d1e485e319799eb6dd61",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-files-error-codes.ts",
+      "destPath": "packages/sdk/src/core/files-error-codes.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7e3d256694bfbb9d643285603445c03554922b762ce26442e0db3415bf46b93b",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-files-http.ts",
+      "destPath": "packages/sdk/src/core/files-http.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "4ce5c4d26d10bf4e0083c5180a7b0bd4a03f68c8248dad6edc8a536e9ddc960f",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-files.ts",
+      "destPath": "packages/sdk/src/core/files.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "1e5bc77abfc49b5f0b6855a5f0586aa97a0cf5e27560851cbba47b57fd3d7186",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-link-cursor-storage.ts",
+      "destPath": "packages/sdk/src/core/link-cursor-storage.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "5097654bcfa3b3c5ee7aca5edd017f5b4ab85858f56ddd46f926e33a256197e6",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-link-frames.ts",
+      "destPath": "packages/sdk/src/core/link-frames.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-link-socket.ts",
+      "destPath": "packages/sdk/src/core/link-socket.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "f992982e2528470cfef0484703361d06c33ae70e4f11bd814e7bf8f2b7187340",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-link-transport.ts",
+      "destPath": "packages/sdk/src/core/link-transport.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "339b0eccf9c43a4c9d04c896e05f117d2d355824eacc134e81bd8f8512d7dcf6",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-pairing-csr.ts",
+      "destPath": "packages/sdk/src/pairing/csr.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "147886a21f886b812d37f20a1e1095ac2f8b6023a9424e45cdd24954beb0b4b7",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-pairing.ts",
+      "destPath": "packages/sdk/src/pairing/client.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0f88798bc00086f6cd1096c2a1030860587ac85aad21454ffe99ec28dd014674",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-project.ts",
+      "destPath": "packages/sdk/src/core/project.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "7d7e9b076580887ef94f789c5d642c6a4bce161264d31f621028a12647c71aa9",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-registration-blob.ts",
+      "destPath": "packages/sdk/src/pairing/registration-blob.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "0defbe90c23ae2cb7983085ebd41ac7e96218185a5ee0b7bbf6878f79944ec5a",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/core-session.ts",
+      "destPath": "packages/sdk/src/core/session.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "fbcf16ecc04aec7a76fffbe4b1226407aaf6fb4cf3225cd607aa67057f38aee5",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/durable-core-client.ts",
+      "destPath": "packages/sdk/src/core/durable-client.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "010eb75874d6c2244b89d64a5b0b82200cbf5c7f60f8f3c20691f347159c80b4",
+      "category": "sdk"
+    },
+    {
+      "sourceRepo": "actana/control",
+      "sourcePath": "packages/sdk/src/terminal-screen.ts",
+      "destPath": "packages/sdk/src/core/terminal-screen.ts",
+      "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
+      "sha256": "f33212065aaea817c47f78f1691e1450f14dc97eccdcaa3bed1490a73414e86f",
+      "category": "sdk"
+    }
+  ],
+  "stats": {
+    "totalEntries": 132,
+    "pairingLiftTableRows": 14,
+    "byCategory": {
+      "pairing": 14,
+      "sdk": 43,
+      "cli": 75
+    }
+  },
+  "uncertainCliClassification": [
+    {
+      "sourcePath": "packages/cli/src/actana-cli-entry.ts",
+      "destPath": "packages/cli/src/entry.ts",
+      "reason": "dispatcher serves both client and machine halves; only the client block lifts"
+    },
+    {
+      "sourcePath": "packages/cli/src/actana-cli.ts",
+      "destPath": "packages/cli/src/run-client.ts",
+      "reason": "dispatcher serves both client and machine halves; only the client block lifts"
+    }
+  ]
+}

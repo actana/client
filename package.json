@@ -1,0 +1,35 @@
+{
+  "name": "actana-client",
+  "version": "0.5.0",
+  "description": "Actana client — shared @actana/sdk and @actana/cli packages for pairing, core-link, and product CLI nouns.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.2",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "check:node": "node scripts/require-node-24.mjs",
+    "preinstall": "node scripts/require-node-24.mjs",
+    "pretypecheck": "node scripts/require-node-24.mjs",
+    "prelint": "node scripts/require-node-24.mjs",
+    "pretest": "node scripts/require-node-24.mjs",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint packages scripts eslint.config.mjs",
+    "test": "node scripts/run-unit-tests.mjs"
+  },
+  "dependencies": {
+    "@actana/cli": "workspace:*",
+    "@actana/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "25.8.0",
+    "eslint": "10.6.0",
+    "globals": "17.6.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.63.0",
+    "vitest": "4.1.6"
+  }
+}

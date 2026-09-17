@@ -1,0 +1,15 @@
+savePrefix: ""
+
+packages:
+  - "packages/*"
+
+overrides:
+  "esbuild": 0.28.1
+  "lodash-es": 4.18.1
+  "shell-quote": ">=1.8.5"
+  "tmp": ">=0.2.7"
+  "undici": ">=7.28.0"
+  "ws": ">=8.21.0"
+
+allowBuilds:
+  esbuild: true

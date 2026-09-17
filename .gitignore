@@ -1,0 +1,15 @@
+node_modules
+dist
+.pnpm-store
+.DS_Store
+*.sw?
+*.log
+.env
+.env.local
+test-results/
+coverage/
+.vite/
+
+# Local agent scratch
+Temp/
+**/grok-goal-*/
