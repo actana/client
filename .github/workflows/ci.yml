@@ -51,6 +51,10 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
           cache: true
       - run: pnpm install --frozen-lockfile
+      # The SDK's pretest (packages/sdk/scripts/vendor-control-pin.mjs) extracts a
+      # pinned actana/control commit from a sibling `../actana-control` checkout.
+      - name: Check out actana/control beside this repo
+        run: git clone --quiet --filter=blob:none https://github.com/actana/control.git "$GITHUB_WORKSPACE/../actana-control"
       - run: pnpm test
 
   lint:
