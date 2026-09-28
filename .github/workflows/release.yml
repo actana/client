@@ -50,7 +50,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build publishable packages
-        run: pnpm -r --filter "@actana/sdk" --filter "@actana/cli" run build --if-present
+        run: pnpm -r --if-present --filter "@actana/sdk" --filter "@actana/cli" run build
 
       - name: Create release PR or publish to npm
         uses: changesets/action@06245a4e0a36c064a573d4150030f5ec548e4fcc # v1.4.10
