@@ -62,3 +62,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # setup-node's .npmrc (NPM_CONFIG_USERCONFIG) authenticates with
+          # NODE_AUTH_TOKEN; without it npm publishes with a placeholder and gets E404.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
