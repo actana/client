@@ -637,9 +637,9 @@
       "sourcePath": "packages/sdk/src/pairing/server/index.ts",
       "destPath": "packages/sdk/src/pairing/server/index.ts",
       "commit": "848269c",
-      "sha256": "5b26eb456616ad624fe926b1b3c1eacbea8957d90008a68ff5adb22832f6bceb",
+      "sha256": "e62482ab931dfc013868e9a9382b586e0a71d3bb292447be1befdc671e04e2c1",
       "category": "pairing",
-      "note": "T-210: createPairing composition root — client-original"
+      "note": "T-210: createPairing composition root — client-original; actana/client#12 adds audit, logger and bearerDays options"
     },
     {
       "sourceRepo": "actana/control",
@@ -657,9 +657,10 @@
       "destPath": "packages/sdk/src/pairing/server/revocation.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "d066553308a8678f176547ab2a06525e7c33a71a7d6e24aa37c6cd548e0501e0",
-      "destSha256": "bbcbc9473d3081c4bdd9b990f97cfba3d06a77ad9520e7f4e4e630e98d18272f",
+      "destSha256": "bf27d8c40f202f2d1afee37312c0301ddbc66a2b602714d6e37a24533c3c7b20",
       "liftTableRow": "server/revocation",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "actana/client#12: intentional divergence from Control — startPairingRevocationSweep returns a ready promise beside stop()"
     },
     {
       "sourceRepo": "actana/control",
