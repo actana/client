@@ -123,6 +123,11 @@ function clientCertVerified(req: IncomingMessage): boolean {
  * Wire pairing for a product server: gate, redeem route, and revocation sweep.
  */
 export function createPairing<Grant = unknown>(opts: CreatePairingOptions<Grant>): PairingComposition<Grant> {
+  // A NaN or non-positive lifetime would sign a bearer that never verifies (or
+  // one already expired) and only fail at the first client — refuse it here.
+  if (opts.bearerDays !== undefined && !(Number.isFinite(opts.bearerDays) && opts.bearerDays > 0)) {
+    throw new RangeError(`createPairing: bearerDays must be a finite number above 0, got ${String(opts.bearerDays)}`);
+  }
   const names = opts.names ?? NEUTRAL_NAMES;
   const openPaths: readonly OpenPathSpec[] = opts.openPaths ?? [PAIRING_REDEEM_PATH];
   const hosts = opts.material.serverHosts ?? [];

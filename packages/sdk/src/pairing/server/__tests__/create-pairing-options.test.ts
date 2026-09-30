@@ -330,3 +330,41 @@ describe("the logger option", () => {
     expect(written).not.toContain(material.bearerSecret);
   }, 30_000);
 });
+
+describe("the bearerDays option", () => {
+  it("sets the lifetime of a redeemed bearer", async () => {
+    const rig = await startRig({ bearerDays: 7 });
+    const { sessionId, code } = await rig.openSession();
+    const before = Date.now();
+
+    const res = await rig.redeem({ sessionId, code });
+
+    const claims = decodeBearer((JSON.parse(res.body) as { bearer: string }).bearer)!;
+    expect(claims.exp - before).toBeGreaterThanOrEqual(7 * DAY_MS);
+    expect(claims.exp - Date.now()).toBeLessThanOrEqual(7 * DAY_MS);
+  }, 30_000);
+
+  it("accepts a fractional lifetime", async () => {
+    const rig = await startRig({ bearerDays: 0.5 });
+    const { sessionId, code } = await rig.openSession();
+    const before = Date.now();
+
+    const res = await rig.redeem({ sessionId, code });
+
+    const claims = decodeBearer((JSON.parse(res.body) as { bearer: string }).bearer)!;
+    expect(claims.exp - before).toBeGreaterThanOrEqual(DAY_MS / 2);
+    expect(claims.exp - Date.now()).toBeLessThanOrEqual(DAY_MS / 2);
+  }, 30_000);
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("refuses bearerDays %s before serving anyone", (days) => {
+    expect(() =>
+      createPairing({
+        store: createMemoryPairingStore(),
+        material,
+        endpointScheme: "wss",
+        onRevoked: () => {},
+        bearerDays: days,
+      }),
+    ).toThrow(RangeError);
+  });
+});
