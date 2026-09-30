@@ -328,7 +328,7 @@
       "destPath": "packages/cli/src/run-client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "99716ddd54f41c76fd33170b4e14b738c750787f85d2dfc7071b9b63cd751ee4",
-      "destSha256": "2b9148a25892e42729fa7ec8dbb7ed70511fe045545e7fda25fa66a55ab3aab7",
+      "destSha256": "f21ed0605b5b9e390f2baf852727174020593e1e500eeac91f421cc497241b14",
       "category": "cli",
       "note": "T-217: client nouns only; machine dispatch deferred"
     },
@@ -637,9 +637,9 @@
       "sourcePath": "packages/sdk/src/pairing/server/index.ts",
       "destPath": "packages/sdk/src/pairing/server/index.ts",
       "commit": "848269c",
-      "sha256": "5b26eb456616ad624fe926b1b3c1eacbea8957d90008a68ff5adb22832f6bceb",
+      "sha256": "63aceb85ce5ce6f79e0b4ae32a3bba4c3983250850680d346bff8ad0f07840b0",
       "category": "pairing",
-      "note": "T-210: createPairing composition root \u2014 client-original"
+      "note": "T-210: createPairing composition root — client-original; actana/client#12 adds audit, logger and bearerDays options"
     },
     {
       "sourceRepo": "actana/control",
@@ -657,9 +657,10 @@
       "destPath": "packages/sdk/src/pairing/server/revocation.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "d066553308a8678f176547ab2a06525e7c33a71a7d6e24aa37c6cd548e0501e0",
-      "destSha256": "bbcbc9473d3081c4bdd9b990f97cfba3d06a77ad9520e7f4e4e630e98d18272f",
+      "destSha256": "bf27d8c40f202f2d1afee37312c0301ddbc66a2b602714d6e37a24533c3c7b20",
       "liftTableRow": "server/revocation",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "actana/client#12: intentional divergence from Control — startPairingRevocationSweep returns a ready promise beside stop()"
     },
     {
       "sourceRepo": "actana/control",
@@ -680,7 +681,7 @@
       "sha256": "28e2ceda49e3cf0233ff110bf456dde213595e2c70fb80358479260dfaa92bb4",
       "liftTableRow": "server/preauth-gate",
       "category": "pairing",
-      "destSha256": "2678e96ff3555893c7ee4aafae899709d9841a14c267cc6864c9742cce45457a"
+      "destSha256": "82fd8b2b4a98fa651fa63a5e4e31fac90cdb75e3f5d02e49e0e0e749ce69d41b"
     },
     {
       "sourceRepo": "actana/control",

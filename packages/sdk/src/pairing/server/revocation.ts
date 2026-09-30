@@ -153,7 +153,7 @@ export class PairingRevocations {
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       if (!this.failClosed) {
-        this.logger.error("pairing.revocation.unreadable", { error, effect: "every pairing refused" });
+        this.logger.error("core-pairing.revocation.unreadable", { error, effect: "every pairing refused" });
       }
       this.failClosed = true;
       return { ok: false, error };
@@ -205,8 +205,14 @@ export class PairingRevocations {
   }
 }
 
-/** A running sweep. Stopped with the server, like every other timer. */
-export type PairingRevocationSweep = { stop(): void };
+/**
+ * A running sweep. Stopped with the server, like every other timer.
+ *
+ * `ready` settles once the boot read has seeded the revoked set — or put the
+ * server into fail-closed. A host awaits it before it listens, so no request is
+ * served against a set that has not been read yet.
+ */
+export type PairingRevocationSweep = { stop(): void; ready: Promise<void> };
 
 /** Options for {@link startPairingRevocationSweep}. `onRevoked` is required. */
 export type PairingRevocationSweepOptions = {
@@ -265,8 +271,9 @@ export function startPairingRevocationSweep(opts: PairingRevocationSweepOptions)
   };
 
   scheduleTick(true);
+  const ready = sweepInFlight ?? Promise.resolve();
 
   const timer = setInterval(() => scheduleTick(false), opts.intervalMs ?? REVOCATION_SWEEP_MS);
   timer.unref?.();
-  return { stop: () => clearInterval(timer) };
+  return { stop: () => clearInterval(timer), ready };
 }
