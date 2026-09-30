@@ -368,3 +368,48 @@ describe("the bearerDays option", () => {
     ).toThrow(RangeError);
   });
 });
+
+describe("the revocation sweep's ready promise", () => {
+  it("settles only after the boot read has seeded the revoked set", async () => {
+    const base = createMemoryPairingStore();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow: PairingStore = {
+      ...base,
+      revokedSerials: async () => {
+        await gate;
+        return new Set(["0A1B2C"]);
+      },
+    };
+    const rig = await startRig({}, slow);
+
+    const sweep = rig.pairing.startRevocationSweep();
+    let settled = false;
+    void sweep.ready.then(() => (settled = true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    expect(rig.pairing.gate.revocations.isRevoked("0a1b2c")).toBe(false);
+
+    release();
+    await sweep.ready;
+    sweep.stop();
+
+    expect(rig.pairing.gate.revocations.isRevoked("0a1b2c")).toBe(true);
+  }, 30_000);
+
+  it("settles with the server failing closed when the store cannot be read", async () => {
+    const base = createMemoryPairingStore();
+    const rig = await startRig({}, {
+      ...base,
+      revokedSerials: async () => {
+        throw new Error("pairing store is corrupt");
+      },
+    });
+
+    const sweep = rig.pairing.startRevocationSweep();
+    await sweep.ready;
+    sweep.stop();
+
+    expect(rig.pairing.gate.revocations.isFailClosed()).toBe(true);
+  }, 30_000);
+});
