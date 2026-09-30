@@ -45,7 +45,7 @@ import type {
   CoreLinkProjectSnapshot,
   CoreLinkPtySpawnHarness,
   CoreLinkSessionLockState,
-  CoreLinkTaskSnapshot,
+  CoreLinkSessionRow,
 } from "@actana/sdk/core";
 import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 
@@ -67,8 +67,8 @@ export function isKnownHarness(value: string): value is CoreLinkPtySpawnHarness 
  * and an exit code without parsing English out of an SDK error.
  *
  * The kinds are the situations a person actually lands in, and each is a
- * different next step: a Task id that does not exist is a typo, a Session with
- * no live PTY is a harness that has already exited, a Task the harness never
+ * different next step: a Session id that does not exist is a typo, a Session with
+ * no live PTY is a harness that has already exited, a Session the harness never
  * reported a session id for has nothing to resume *from*, and a Session that is
  * already running is one to `send` to rather than start again. Anything the
  * Core refused for its own reasons arrives as `refused` carrying the Core's own
@@ -93,18 +93,18 @@ export class SessionGatewayError extends Error {
 
 /** One row of `actana session ls`. */
 export type SessionRow = {
-  taskId: string;
+  sessionId: string;
   title: string;
-  /** The harness on the Task row, as the Core spells it. */
+  /** The harness on the Session row, as the Core spells it. */
   harness: string;
   /** The Core's status for the Session — `running`, `finished`, `needs-input`, … */
   status: string;
   projectId: string;
-  /** The Project's name, or null when the Task points at a Project the Core did not list. */
+  /** The Project's name, or null when the Session points at a Project the Core did not list. */
   project: string | null;
-  /** The live PTY, or null when nothing is running for this Task right now. */
+  /** The live PTY, or null when nothing is running for this Session right now. */
   ptyId: string | null;
-  /** Whether a harness process is running for this Task — `ptyId !== null`, named. */
+  /** Whether a harness process is running for this Session — `ptyId !== null`, named. */
   live: boolean;
   /**
    * Whether *this* client may write to the Session, and which of the three lock
@@ -130,7 +130,7 @@ export type SessionStartRequest = {
 };
 
 export type SessionResumeRequest = {
-  taskId: string;
+  sessionId: string;
   prompt?: string;
   dangerouslySkipPermissions: boolean;
 };
@@ -153,11 +153,11 @@ export type SessionOutcome = {
  * can answer say so with `null` rather than with a plausible value.
  */
 export type StartedSession = {
-  taskId: string;
+  sessionId: string;
   ptyId: string;
   /**
    * The harness running in it, as the Core spells it — `null` only when this
-   * invocation attached to a Session whose Task row the Core did not list, which
+   * invocation attached to a Session whose row the Core did not list, which
    * is a row deleted out from under a live PTY. The wait does not need it; it is
    * on the object because a caller reading the result wants to know what it was
    * talking to.
@@ -216,7 +216,7 @@ export type StartedSession = {
 
 /** What `actana session logs` reads back. */
 export type SessionLogs = {
-  taskId: string;
+  sessionId: string;
   ptyId: string;
   /** The replay ring rendered as a terminal would show it, scrollback included. */
   screen: string;
@@ -230,14 +230,14 @@ export type SessionGateway = {
   list(project: string | null): Promise<SessionRow[]>;
   start(request: SessionStartRequest): Promise<StartedSession>;
   resume(request: SessionResumeRequest): Promise<StartedSession>;
-  logs(taskId: string): Promise<SessionLogs>;
+  logs(sessionId: string): Promise<SessionLogs>;
   /**
    * Write text to a running Session, verbatim. Resolves false if the Core
    * declined. `enter` adds a carriage return as a **separate write to the same
    * PTY**, resolved once for both, so there is no window between them in which
    * the text lands and the return is sent somewhere else — or nowhere.
    */
-  send(taskId: string, text: string, opts?: { enter?: boolean }): Promise<boolean>;
+  send(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<boolean>;
   /**
    * Attach to a running Session and hand back something to wait on — the
    * primitive `actana session wait` is (#289 B).
@@ -247,7 +247,7 @@ export type SessionGateway = {
    * otherwise on the next settling status. That is the honest answer to "tell me
    * when this Session is not working", which is what the verb asks.
    */
-  wait(taskId: string): Promise<StartedSession>;
+  wait(sessionId: string): Promise<StartedSession>;
   /**
    * Write text into a running Session and hand back a wait for **the turn that
    * write starts** — one PTY resolution for both, and no window between them.
@@ -257,9 +257,9 @@ export type SessionGateway = {
    * the status it was already sitting at (#289 A, and the `settledNow` landmine
    * that is the reason the stamp exists).
    */
-  sendAndWait(taskId: string, text: string, opts?: { enter?: boolean }): Promise<StartedSession>;
-  /** Kill the harness running for this Task, whoever started it. */
-  kill(taskId: string): Promise<{ ptyId: string; killed: boolean }>;
+  sendAndWait(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<StartedSession>;
+  /** Kill the harness running for this Session, whoever started it. */
+  kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }>;
   close(): void;
 };
 
@@ -293,26 +293,26 @@ class CoreLinkSessionGateway implements SessionGateway {
     const projectId = project === null ? undefined : this.resolveProject(projects, project).projectId;
 
     // Two reads because they answer two questions: `sessionsList` is the
-    // Session view (status, the live PTY, this client's lock) and the Task rows
+    // Session view (status, the live PTY, this client's lock) and the Session rows
     // carry what a person reads a list by — the title, the harness, the Project.
     // Neither frame carries the other's fields, and joining here costs one round
     // trip against a list nobody paginates.
-    const [sessions, tasks] = await Promise.all([
+    const [sessions, rows] = await Promise.all([
       this.client.sessionsList(projectId),
-      this.client.tasksList(projectId),
+      this.client.sessionRowsList(projectId),
     ]);
-    const byTask = new Map(tasks.tasks.map((task) => [task.taskId, task]));
+    const bySessionRow = new Map(rows.sessions.map((row) => [row.sessionId, row]));
     const projectNames = new Map(projects.map((p) => [p.projectId, p.name]));
 
     return sessions.map((session) => {
-      const task = byTask.get(session.taskId);
+      const row = bySessionRow.get(session.sessionId);
       return {
-        taskId: session.taskId,
-        title: task?.title ?? "(untitled)",
-        harness: task?.agent ?? "(unknown)",
+        sessionId: session.sessionId,
+        title: row?.title ?? "(untitled)",
+        harness: row?.agent ?? "(unknown)",
         status: session.status,
-        projectId: task?.projectId ?? "",
-        project: task ? (projectNames.get(task.projectId) ?? null) : null,
+        projectId: row?.projectId ?? "",
+        project: row ? (projectNames.get(row.projectId) ?? null) : null,
         ptyId: session.ptyId,
         live: session.ptyId !== null,
         writable: session.lock?.writable ?? null,
@@ -343,43 +343,43 @@ class CoreLinkSessionGateway implements SessionGateway {
   }
 
   async resume(request: SessionResumeRequest): Promise<StartedSession> {
-    const task = await this.findTask(request.taskId);
+    const row = await this.findSessionRow(request.sessionId);
 
-    // A Task with a live PTY is a Session that never stopped. Starting a second
+    // A Session with a live PTY is one that never stopped. Starting a second
     // harness on the same row would leave two processes writing one transcript
     // and one of them unreachable — `session send` and `session logs` resolve a
-    // Task to *the* PTY, and there would be two.
-    const live = await this.client.findByTask(task.taskId);
+    // Session to *the* PTY, and there would be two.
+    const live = await this.client.findBySession(row.sessionId);
     if (live.ptyId !== null) {
       throw new SessionGatewayError(
         "already-running",
-        `session ${task.taskId} is already running (pty ${live.ptyId})`,
+        `session ${row.sessionId} is already running (pty ${live.ptyId})`,
       );
     }
 
-    // The harness's own id for the conversation, written on the Task row by the
+    // The harness's own id for the conversation, written on the Session row by the
     // Core's hook pipeline. Absent means no harness ever reported one — there is
     // nothing to resume, and inventing an id would start a fresh Session while
     // claiming to have continued one.
-    if (!task.claudeSessionId) {
+    if (!row.claudeSessionId) {
       throw new SessionGatewayError(
         "nothing-to-resume",
-        `session ${task.taskId} has no harness session id on it — nothing was recorded to resume from`,
+        `session ${row.sessionId} has no harness session id on it — nothing was recorded to resume from`,
       );
     }
-    if (!isKnownHarness(task.agent)) {
+    if (!isKnownHarness(row.agent)) {
       throw new SessionGatewayError(
         "refused",
-        `session ${task.taskId} ran under "${task.agent}", which this build cannot start`,
+        `session ${row.sessionId} ran under "${row.agent}", which this build cannot start`,
       );
     }
 
-    const project = await this.projectFor(task.projectId);
+    const project = await this.projectFor(row.projectId);
     const session = await this.begin({
-      taskId: task.taskId,
+      sessionId: row.sessionId,
       cwd: project.path,
-      harness: task.agent,
-      command: harnessResumeCommand(task.agent, task.claudeSessionId, {
+      harness: row.agent,
+      command: harnessResumeCommand(row.agent, row.claudeSessionId, {
         dangerouslySkipPermissions: request.dangerouslySkipPermissions,
       }),
       prompt: request.prompt,
@@ -388,12 +388,12 @@ class CoreLinkSessionGateway implements SessionGateway {
     return wrap(session, {
       projectId: project.projectId,
       project: project.name,
-      harness: task.agent,
+      harness: row.agent,
     });
   }
 
-  async logs(taskId: string): Promise<SessionLogs> {
-    const ptyId = await this.livePty(taskId);
+  async logs(sessionId: string): Promise<SessionLogs> {
+    const ptyId = await this.livePty(sessionId);
     const replay = await this.client.replay(ptyId);
 
     // Rule 2 in the header, in four lines. The screen is built at the Core's own
@@ -403,14 +403,14 @@ class CoreLinkSessionGateway implements SessionGateway {
     // reason `--raw` exists beside it.
     const terminal = new TerminalScreen({ cols: DEFAULT_COLS, rows: DEFAULT_ROWS });
     terminal.write(replay.data);
-    return { taskId, ptyId, screen: terminal.text(), raw: replay.data };
+    return { sessionId, ptyId, screen: terminal.text(), raw: replay.data };
   }
 
-  async send(taskId: string, text: string, opts: { enter?: boolean } = {}): Promise<boolean> {
+  async send(sessionId: string, text: string, opts: { enter?: boolean } = {}): Promise<boolean> {
     // One resolution for the whole verb. Resolving again for the return would
     // open a window — the harness exits between the two round trips, the text
     // has landed, and the command reports a failure after a partial delivery.
-    const ptyId = await this.livePty(taskId);
+    const ptyId = await this.livePty(sessionId);
 
     // Verbatim, and that is the whole verb. See rule 1: nothing is appended,
     // nothing is timed, nothing is retried. The return, when it was asked for,
@@ -420,25 +420,25 @@ class CoreLinkSessionGateway implements SessionGateway {
     return this.client.write(ptyId, "\r");
   }
 
-  async wait(taskId: string): Promise<StartedSession> {
-    return this.attached(taskId, null);
+  async wait(sessionId: string): Promise<StartedSession> {
+    return this.attached(sessionId, null);
   }
 
   async sendAndWait(
-    taskId: string,
+    sessionId: string,
     text: string,
     opts: { enter?: boolean } = {},
   ): Promise<StartedSession> {
-    return this.attached(taskId, { text, enter: opts.enter === true });
+    return this.attached(sessionId, { text, enter: opts.enter === true });
   }
 
-  async kill(taskId: string): Promise<{ ptyId: string; killed: boolean }> {
-    // Resolved through the Core by Task id, which is what makes killing a
+  async kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }> {
+    // Resolved through the Core by Session id, which is what makes killing a
     // Session this CLI did not start ordinary rather than special: the PTY
     // belongs to the Core, and every client names it the same way. The only
     // Session this refuses is one another client holds the write lock on, and
     // that refusal is the Core's (ADR 0024).
-    const ptyId = await this.livePty(taskId);
+    const ptyId = await this.livePty(sessionId);
     const killed = await this.client.kill(ptyId);
     return { ptyId, killed };
   }
@@ -454,10 +454,10 @@ class CoreLinkSessionGateway implements SessionGateway {
    * the result as a {@link StartedSession} to wait on.
    *
    * **One PTY resolution covers the write and the wait.** `CoreSession.attach`
-   * resolves the Task's live PTY once and wires the byte stream, the exit and
+   * resolves the Session's live PTY once and wires the byte stream, the exit and
    * the event log before this method writes a character; the write goes to that
    * PTY and the wait counts from the id the Core answered it with. There is no
-   * second `findByTask` between them, so there is no window in which the harness
+   * second `findBySession` between them, so there is no window in which the harness
    * could move, exit, or finish a turn unobserved.
    *
    * The delivery is two writes when `--enter` was asked for — the text, then the
@@ -466,21 +466,21 @@ class CoreLinkSessionGateway implements SessionGateway {
    * **later** stamp, because the turn starts at the return, not at the text.
    */
   private async attached(
-    taskId: string,
+    sessionId: string,
     deliver: { text: string; enter: boolean } | null,
   ): Promise<StartedSession> {
     // The archived list as a fallback, because a Session can be archived while
-    // its harness is still running — and `tasksList` is active rows only by
+    // its harness is still running — and `sessionRowsList` is active rows only by
     // design (ADR 0019). Every other verb that names a live PTY works on such a
     // Session; refusing it here would make `wait` the odd one out over a row
     // this only reads two display fields off.
-    const task = await this.findAnyTask(taskId);
+    const row = await this.findAnySessionRow(sessionId);
     const project =
-      task === null ? null : await this.projectFor(task.projectId).catch(() => null);
+      row === null ? null : await this.projectFor(row.projectId).catch(() => null);
 
     let session: CoreSession;
     try {
-      session = await CoreSession.attach(this.client, { taskId });
+      session = await CoreSession.attach(this.client, { sessionId });
     } catch (err) {
       // A Session with no live PTY is the one failure this path has that the
       // others do not, and it is `not-running` here for the same reason it is
@@ -499,7 +499,7 @@ class CoreLinkSessionGateway implements SessionGateway {
           if (!wrote.ok) {
             throw new SessionGatewayError(
               "not-running",
-              `the Core did not accept the write to session ${taskId}`,
+              `the Core did not accept the write to session ${sessionId}`,
             );
           }
           afterEventId = Math.max(afterEventId, wrote.deliveryEventId);
@@ -509,7 +509,7 @@ class CoreLinkSessionGateway implements SessionGateway {
           if (!returned.ok) {
             throw new SessionGatewayError(
               "not-running",
-              `the Core did not accept the carriage return for session ${taskId}`,
+              `the Core did not accept the carriage return for session ${sessionId}`,
             );
           }
           afterEventId = Math.max(afterEventId, returned.deliveryEventId);
@@ -535,9 +535,9 @@ class CoreLinkSessionGateway implements SessionGateway {
         if ((deliver.text.length > 0 || deliver.enter) && afterEventId === 0) {
           throw new SessionGatewayError(
             "refused",
-            `session ${taskId} took the text, but this Core did not record the delivery in its ` +
+            `session ${sessionId} took the text, but this Core did not record the delivery in its ` +
               `event log — so there is no cursor to await this turn from, and waiting would report ` +
-              `the turn before it. The text was delivered; \`actana session logs ${taskId}\` shows it`,
+              `the turn before it. The text was delivered; \`actana session logs ${sessionId}\` shows it`,
           );
         }
       } catch (err) {
@@ -547,9 +547,9 @@ class CoreLinkSessionGateway implements SessionGateway {
     }
 
     return wrap(session, {
-      projectId: task?.projectId ?? "",
+      projectId: row?.projectId ?? "",
       project: project?.name ?? null,
-      harness: task?.agent ?? null,
+      harness: row?.agent ?? null,
       afterEventId,
     });
   }
@@ -557,7 +557,7 @@ class CoreLinkSessionGateway implements SessionGateway {
   /** Start a Session, translating the SDK's refusal into a gateway error. */
   private async begin(opts: {
     projectId?: string;
-    taskId?: string;
+    sessionId?: string;
     cwd: string;
     harness: CoreLinkPtySpawnHarness;
     title?: string;
@@ -568,7 +568,7 @@ class CoreLinkSessionGateway implements SessionGateway {
     try {
       return await CoreSession.start(this.client, {
         ...(opts.projectId ? { projectId: opts.projectId } : {}),
-        ...(opts.taskId ? { taskId: opts.taskId } : {}),
+        ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
         ...(opts.title ? { title: opts.title } : {}),
         ...(opts.command ? { command: opts.command } : {}),
         ...(opts.prompt ? { prompt: opts.prompt } : {}),
@@ -584,45 +584,45 @@ class CoreLinkSessionGateway implements SessionGateway {
     }
   }
 
-  /** The PTY running for this Task, or the reason there is none to act on. */
-  private async livePty(taskId: string): Promise<string> {
-    const { ptyId } = await this.client.findByTask(taskId);
+  /** The PTY running for this Session, or the reason there is none to act on. */
+  private async livePty(sessionId: string): Promise<string> {
+    const { ptyId } = await this.client.findBySession(sessionId);
     if (ptyId === null) {
       throw new SessionGatewayError(
         "not-running",
-        `session ${taskId} has no harness running — nothing to read from or write to`,
+        `session ${sessionId} has no harness running — nothing to read from or write to`,
       );
     }
     return ptyId;
   }
 
   /**
-   * The Task row for a Session, active **or archived**, or null when this Core
+   * The Session row for a Session, active **or archived**, or null when this Core
    * has neither.
    *
    * Null rather than a refusal, because the caller is a verb that acts on a live
    * PTY and reads this row only for two display fields. `resume` still uses
-   * {@link findTask}, where a missing row is genuinely the end of the road: it
+   * {@link findSessionRow}, where a missing row is genuinely the end of the road: it
    * needs the harness and the recorded session id to start anything at all.
    *
    * The archived list is asked only when the active one did not have it, so the
    * ordinary path still costs one round trip.
    */
-  private async findAnyTask(taskId: string): Promise<CoreLinkTaskSnapshot | null> {
-    const { tasks } = await this.client.tasksList();
-    const active = tasks.find((row) => row.taskId === taskId);
+  private async findAnySessionRow(sessionId: string): Promise<CoreLinkSessionRow | null> {
+    const { sessions } = await this.client.sessionRowsList();
+    const active = sessions.find((row) => row.sessionId === sessionId);
     if (active) return active;
-    const archived = await this.client.archivedTasksList();
-    return archived.find((row) => row.taskId === taskId) ?? null;
+    const archived = await this.client.archivedSessionRowsList();
+    return archived.find((row) => row.sessionId === sessionId) ?? null;
   }
 
-  private async findTask(taskId: string): Promise<CoreLinkTaskSnapshot> {
-    const { tasks } = await this.client.tasksList();
-    const task = tasks.find((row) => row.taskId === taskId);
-    if (!task) {
-      throw new SessionGatewayError("no-such-session", `this Core has no session ${taskId}`);
+  private async findSessionRow(sessionId: string): Promise<CoreLinkSessionRow> {
+    const { sessions } = await this.client.sessionRowsList();
+    const row = sessions.find((row) => row.sessionId === sessionId);
+    if (!row) {
+      throw new SessionGatewayError("no-such-session", `this Core has no session ${sessionId}`);
     }
-    return task;
+    return row;
   }
 
   private async projectFor(projectId: string): Promise<CoreLinkProjectSnapshot> {
@@ -675,7 +675,7 @@ class CoreLinkSessionGateway implements SessionGateway {
  * Present one `CoreSession` as a {@link StartedSession}.
  *
  * `harness` is passed in rather than read off the Session: a spawn knows it
- * because it asked for it, and an attach reads it off the Task row — the Core
+ * because it asked for it, and an attach reads it off the Session row — the Core
  * publishes no harness for a PTY that is already running, and `CoreSession` says
  * so with `null` rather than guessing. Same for `command` and `reportsTurnStart`,
  * which are answers to a `spawn` frame and stay null on the attach path.
@@ -694,7 +694,7 @@ function wrap(
 ): StartedSession {
   const afterEventId = opts.afterEventId ?? 0;
   return {
-    taskId: session.taskId,
+    sessionId: session.sessionId,
     ptyId: session.ptyId,
     harness: opts.harness,
     command: session.command,
@@ -733,7 +733,7 @@ function rememberedHarness(project: CoreLinkProjectSnapshot): CoreLinkPtySpawnHa
 }
 
 /**
- * A Task title from the prompt, because "SDK session" — the SDK's own default —
+ * A Session title from the prompt, because "SDK session" — the SDK's own default —
  * is not a title anybody can pick out of `session ls`.
  *
  * First line, trimmed, and short enough to sit in a table column. A Session

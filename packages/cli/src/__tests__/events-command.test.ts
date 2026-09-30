@@ -48,7 +48,7 @@ describe("actana events tail", () => {
       connect: core.connect,
     });
     await settle();
-    core.emitEvent({ eventId: 1, kind: "task:created" });
+    core.emitEvent({ eventId: 1, kind: "session:created" });
     await run;
 
     expect(core.connectOptions[0]?.durable).toBe(true);
@@ -63,7 +63,7 @@ describe("actana events tail", () => {
       connect: core.connect,
     });
     await settle();
-    core.emitEvent({ eventId: 1, kind: "task:created", taskId: "t-1", payload: '{"title":"a"}' });
+    core.emitEvent({ eventId: 1, kind: "session:created", sessionId: "t-1", payload: '{"title":"a"}' });
     core.emitEvent({ eventId: 2, kind: "pty:exit", ptyId: "p-1", payload: '{"exitCode":0}' });
 
     const result = await run;
@@ -75,12 +75,30 @@ describe("actana events tail", () => {
     expect(rows[0]).toEqual({
       eventId: 1,
       ts: Date.UTC(2026, 7, 12),
-      kind: "task:created",
+      kind: "session:created",
       ptyId: null,
-      taskId: "t-1",
+      sessionId: "t-1",
       payload: '{"title":"a"}',
     });
     expect(rows[1].kind).toBe("pty:exit");
+  });
+
+  it("labels a session event's subject session=, never task=", async () => {
+    await withRegisteredCore();
+    const core = fakeCore({});
+
+    const run = cli().run(["events", "tail", "--since", "start", "--limit", "1"], {
+      connect: core.connect,
+    });
+    await settle();
+    core.emitEvent({ eventId: 1, kind: "session:created", sessionId: "t-1" });
+
+    const result = await run;
+    expect(result.code).toBe(EXIT_OK);
+    const line = result.out.join("\n");
+    expect(line).toContain("session:created");
+    expect(line).toContain("session=t-1");
+    expect(line).not.toContain("task");
   });
 
   it("prints nothing from the replay tail on a first run, then follows live", async () => {
@@ -92,8 +110,8 @@ describe("actana events tail", () => {
 
     // The tail the Core streams to establish the tip. None of it is this run's
     // business — the operator asked to follow, not to read history.
-    core.emitEvent({ eventId: 1, kind: "task:created" });
-    core.emitEvent({ eventId: 2, kind: "task:updated" });
+    core.emitEvent({ eventId: 1, kind: "session:created" });
+    core.emitEvent({ eventId: 2, kind: "session:updated" });
     core.emitReplayed(2);
     await settle();
 
@@ -125,8 +143,8 @@ describe("actana events tail", () => {
     await settle();
 
     for (const round of [1, 2, 3]) {
-      core.emitEvent({ eventId: round * 2 - 1, kind: "task:created" });
-      core.emitEvent({ eventId: round * 2, kind: "task:updated" });
+      core.emitEvent({ eventId: round * 2 - 1, kind: "session:created" });
+      core.emitEvent({ eventId: round * 2, kind: "session:updated" });
       core.emitReplayed(round * 2);
       await settle();
       // Each round is history, and each re-ask carries the cursor it reached.
@@ -152,13 +170,13 @@ describe("actana events tail", () => {
       connect: core.connect,
     });
     await settle();
-    core.emitEvent({ eventId: 1, kind: "task:created" });
-    core.emitEvent({ eventId: 2, kind: "task:updated" });
+    core.emitEvent({ eventId: 1, kind: "session:created" });
+    core.emitEvent({ eventId: 2, kind: "session:updated" });
 
     const result = await run;
     expect(result.out).toHaveLength(2);
     expect(result.out[0]).toContain("#1");
-    expect(result.out[0]).toContain("task:created");
+    expect(result.out[0]).toContain("session:created");
   });
 
   it("filters by --kind, repeatably", async () => {
@@ -166,12 +184,12 @@ describe("actana events tail", () => {
     const core = fakeCore({});
 
     const run = cli().run(
-      ["events", "tail", "--json", "--since", "start", "--kind", "pty:exit", "--kind", "task:created", "--limit", "2"],
+      ["events", "tail", "--json", "--since", "start", "--kind", "pty:exit", "--kind", "session:created", "--limit", "2"],
       { connect: core.connect },
     );
     await settle();
-    core.emitEvent({ eventId: 1, kind: "task:created" });
-    core.emitEvent({ eventId: 2, kind: "task:updated" });
+    core.emitEvent({ eventId: 1, kind: "session:created" });
+    core.emitEvent({ eventId: 2, kind: "session:updated" });
     core.emitEvent({ eventId: 3, kind: "hook:fired" });
     core.emitEvent({ eventId: 4, kind: "pty:exit" });
 
@@ -188,7 +206,7 @@ describe("actana events tail", () => {
     });
     await settle();
     core.emitDisconnected("socket hang up");
-    core.emitEvent({ eventId: 1, kind: "task:created" });
+    core.emitEvent({ eventId: 1, kind: "session:created" });
 
     const result = await run;
     expect(result.err.join("\n")).toContain("reconnecting");
