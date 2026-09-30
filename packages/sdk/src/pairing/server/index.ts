@@ -2,6 +2,7 @@
 // into the surface each product mounts in a dozen lines (T-210).
 
 import type { IncomingMessage } from "node:http";
+import { pairingAuditor, type PairingAuditSink } from "../audit.ts";
 import type { CertNaming } from "../cert-material.ts";
 import type { PersistedMaterial } from "../material-store.ts";
 import type { PairingStore } from "../store-port.ts";
@@ -25,7 +26,12 @@ import {
   PairingRevocations,
   startPairingRevocationSweep,
   type PairingRevocationSweep,
+  type RevocationLogger,
 } from "./revocation.ts";
+
+export { logPairingAuditFor } from "../audit.ts";
+export type { PairingAuditLogger, PairingAuditSink } from "../audit.ts";
+export type { RevocationLogger } from "./revocation.ts";
 
 /** Product-specific cert and bearer naming. */
 export type PairingProductNames = CertNaming & {
@@ -53,6 +59,21 @@ export type CreatePairingOptions<Grant = unknown> = {
   clientLabel?: ClientLabelPolicy;
   /** Product cert names and bearer prefix; neutral defaults when omitted. */
   names?: PairingProductNames;
+  /**
+   * Where pairing audit records go — one redacted record per redemption attempt
+   * (`pairing.attempt` in Control 0.4.5). Defaults to discarding them.
+   */
+  audit?: PairingAuditSink;
+  /**
+   * Receives the revocation logs: `core-pairing.revocation.unreadable` and
+   * `pairing.revoked`. Defaults to discarding them.
+   */
+  logger?: RevocationLogger;
+  /**
+   * Validity of a redeemed bearer, in days — Control's `AC_CORE_BEARER_DAYS`.
+   * Defaults to 365.
+   */
+  bearerDays?: number;
 };
 
 export type PairingGate = {
@@ -75,6 +96,8 @@ export type PairingComposition<Grant = unknown> = {
   /** Arm the revocation poll — call after the server exists. */
   startRevocationSweep(): PairingRevocationSweep;
 };
+
+const MAX_DATE_MS = 8.64e15;
 
 const NEUTRAL_NAMES: PairingProductNames = {
   caCommonName: "actana-pairing-ca",
@@ -106,13 +129,24 @@ function clientCertVerified(req: IncomingMessage): boolean {
  * Wire pairing for a product server: gate, redeem route, and revocation sweep.
  */
 export function createPairing<Grant = unknown>(opts: CreatePairingOptions<Grant>): PairingComposition<Grant> {
+  // A NaN, non-positive or overflowing lifetime would sign a bearer that never
+  // verifies (or one already expired) and only fail at the first client — refuse
+  // it here. The upper bound is the last instant a Date can hold.
+  if (opts.bearerDays !== undefined) {
+    const expiry = Date.now() + opts.bearerDays * 24 * 60 * 60 * 1000;
+    if (!(opts.bearerDays > 0) || !(expiry <= MAX_DATE_MS)) {
+      throw new RangeError(
+        `createPairing: bearerDays must be above 0 and expire within the range of a Date, got ${String(opts.bearerDays)}`,
+      );
+    }
+  }
   const names = opts.names ?? NEUTRAL_NAMES;
   const openPaths: readonly OpenPathSpec[] = opts.openPaths ?? [PAIRING_REDEEM_PATH];
   const hosts = opts.material.serverHosts ?? [];
   const publicHosts = opts.publicHosts ?? (hosts.length > 0 ? hosts : ["localhost"]);
   const port = opts.port ?? (opts.endpointScheme === "https" ? 443 : 8765);
   const isPreAuthPath = openPathPredicateFrom(openPaths);
-  const revocations = new PairingRevocations(opts.store);
+  const revocations = new PairingRevocations(opts.store, opts.logger);
   const productLabel = names.clientCommonName.replace(/^actana-/, "").replace(/-client$/, "") || "this server";
 
   const redeem = createPairingRedeemHandler<Grant>({
@@ -132,6 +166,8 @@ export function createPairing<Grant = unknown>(opts: CreatePairingOptions<Grant>
       port,
     }),
     clientLabel: opts.clientLabel ?? "session",
+    ...(opts.audit ? { audit: pairingAuditor(opts.audit) } : {}),
+    ...(opts.bearerDays === undefined ? {} : { bearerDays: opts.bearerDays }),
   });
 
   const gate: PairingGate = {
@@ -157,6 +193,7 @@ export function createPairing<Grant = unknown>(opts: CreatePairingOptions<Grant>
       return startPairingRevocationSweep({
         revocations,
         onRevoked: opts.onRevoked,
+        ...(opts.logger ? { logger: opts.logger } : {}),
       });
     },
   };

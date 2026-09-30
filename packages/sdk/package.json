@@ -16,12 +16,14 @@
     "node": ">=24.0.0 <25"
   },
   "files": ["dist"],
+  "sideEffects": false,
   "exports": {
     "./pairing": "./src/pairing.ts",
     "./pairing/server": "./src/pairing/server/index.ts",
     "./pairing/stores/json-file": "./src/pairing/stores/json-file.ts",
     "./pairing/stores/postgres": "./src/pairing/stores/postgres.ts",
     "./core": "./src/core.ts",
+    "./core/link-frames": "./src/core/browser.ts",
     "./search": "./src/search.ts"
   },
   "publishConfig": {
@@ -47,6 +49,10 @@
       "./core": {
         "types": "./dist/core.d.ts",
         "default": "./dist/core.js"
+      },
+      "./core/link-frames": {
+        "types": "./dist/core/browser.d.ts",
+        "default": "./dist/core/browser.js"
       },
       "./search": {
         "types": "./dist/search.d.ts",

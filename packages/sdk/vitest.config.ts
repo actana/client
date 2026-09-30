@@ -23,6 +23,7 @@ export default defineConfig({
       },
       { find: /^@actana\/sdk\/pairing$/, replacement: path.join(sdkSrc, "pairing.ts") },
       { find: /^@actana\/sdk\/core$/, replacement: path.join(sdkSrc, "core.ts") },
+      { find: /^@actana\/sdk\/core\/link-frames$/, replacement: path.join(sdkSrc, "core/browser.ts") },
       { find: /^@actana\/sdk\/search$/, replacement: path.join(sdkSrc, "search.ts") },
       // Control's Core imports the SDK by its old flat paths; map them to /core.
       { find: /^@actana\/sdk\/core-link-frames$/, replacement: path.join(sdkSrc, "core/link-frames.ts") },
