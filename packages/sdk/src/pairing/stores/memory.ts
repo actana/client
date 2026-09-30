@@ -84,6 +84,14 @@ class MemoryPairingStore<Grant> implements PairingStore<Grant> {
     };
   }
 
+  async releaseAttempt(sessionId: string): Promise<void> {
+    await this.withLock(() => {
+      const session = this.sessions.get(sessionId);
+      if (!session) return;
+      this.sessions.set(sessionId, { ...session, attempts: Math.max(session.attempts - 1, 0) });
+    });
+  }
+
   async consume(sessionId: string, now: Date): Promise<boolean> {
     return this.withLock(() => {
       const session = this.sessions.get(sessionId);

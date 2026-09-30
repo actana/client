@@ -670,7 +670,8 @@
       "sha256": "8ffd17376e72abcc6c83ec9b215fd42cafdfe792a78778ed0bb72b3d9f84ed80",
       "liftTableRow": "server/redeem-route",
       "category": "pairing",
-      "destSha256": "9dfdcd255a74c1679a401c1987f1484705e0c7217b1fbc80d0392f7e6fdd2bee"
+      "destSha256": "c3b0f29ea3351c0427869c12d541ee2c6bd443605b423f2eb5e1c807a06c81e1",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",
@@ -699,7 +700,8 @@
       "sha256": "97ff29a06af6040a7c939e950203ddf16f6acd13a9441425348b17cdcd55975a",
       "liftTableRow": "stores/postgres",
       "category": "pairing",
-      "destSha256": "943670655f2fffe875a9915089f7bd917cafb84adc48b73008af489a0315eb8a"
+      "destSha256": "ea0019101dcb22412d684143f6bf1725f3d6c0206c97defb52b77194e4ffed0d",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",
@@ -780,7 +782,8 @@
       "note": "top half of pairing-store.ts",
       "liftTableRow": "stores/json-file",
       "category": "pairing",
-      "destSha256": "06b6a66ca48953814be2b4b5e9cb9a9e8806ea1780de52b1ac5331db1b16ed8f"
+      "destSha256": "1d53cffaaeaeffd14c37daec204ed97450734550348f62a891911ea5e52059d5",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",

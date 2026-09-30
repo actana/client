@@ -139,6 +139,17 @@ class JsonFilePairingStore<Grant> implements PairingStore<Grant> {
     };
   }
 
+  async releaseAttempt(sessionId: string): Promise<void> {
+    await this.withLock(() => {
+      const records = this.persistence.read();
+      const index = records.sessions.findIndex((session) => session.id === sessionId);
+      if (index === -1) return;
+      const session = records.sessions[index]!;
+      records.sessions[index] = { ...session, attempts: Math.max(session.attempts - 1, 0) };
+      this.persistence.write(records);
+    });
+  }
+
   async consume(sessionId: string, now: Date): Promise<boolean> {
     return this.withLock(() => {
       const records = this.persistence.read();
