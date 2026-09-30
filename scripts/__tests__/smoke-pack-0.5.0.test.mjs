@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +21,14 @@ describe("packed 0.5.0 smoke (T-222)", () => {
       process.stderr.write(result.stdout ?? "");
       process.stderr.write(result.stderr ?? "");
     }
+    expect(result.stderr).not.toContain("npm publish --dry-run failed");
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("smoke-pack-0.5.0: OK");
+    // The dry run uses a throwaway prerelease in a scratch copy, never the real version.
+    expect(result.stdout).toMatch(/npm publish --dry-run: .* as 0\.0\.0-smoke\.\d+/);
+    for (const pkg of ["sdk", "cli"]) {
+      const manifest = JSON.parse(readFileSync(join(repoRoot, `packages/${pkg}/package.json`), "utf8"));
+      expect(manifest.version).not.toContain("smoke");
+    }
   });
 });
