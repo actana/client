@@ -98,8 +98,8 @@ describe("DurableCoreClient", () => {
 
   it("replays the tail, ends on eventsReplayed, and persists the cursor it reached", async () => {
     const core = remoteRig();
-    core.eventLog.appendEvent("task:created", '{"a":1}', { taskId: "t1" });
-    core.eventLog.appendEvent("task:updated", '{"a":2}', { taskId: "t1" });
+    core.eventLog.appendEvent("session:created", '{"a":1}', { sessionId: "t1" });
+    core.eventLog.appendEvent("session:updated", '{"a":2}', { sessionId: "t1" });
     const storage = new InMemoryCoreLinkCursorStorage();
     const { client: c } = makeClient(core, { storage });
 
@@ -123,7 +123,7 @@ describe("DurableCoreClient", () => {
 
   it("drops an event at or below the cursor rather than delivering it twice", async () => {
     const core = remoteRig();
-    core.eventLog.appendEvent("task:created", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:created", "{}", { sessionId: "t1" });
     const { client: c, dial } = makeClient(core);
     const seen: number[] = [];
     c.onEvent(({ event }) => seen.push(event.eventId));
@@ -134,14 +134,37 @@ describe("DurableCoreClient", () => {
     // A replay overlap, or a re-delivery after a reconnect: the same event again.
     dial.last().client.receive({
       type: "event",
-      event: { eventId: 1, ts: 1, kind: "task:created", ptyId: null, taskId: "t1", payload: "{}" },
+      event: { eventId: 1, ts: 1, kind: "session:created", ptyId: null, sessionId: "t1", payload: "{}" },
     });
     expect(seen).toEqual([1]);
   });
 
+  it("reads sessionId off an event and never falls back to a legacy taskId (hard cut, no dual-read)", async () => {
+    const core = remoteRig();
+    const { client: c, dial } = makeClient(core);
+    const seen: CoreLinkEvent[] = [];
+    c.onEvent(({ event }) => seen.push(event));
+    await c.connect();
+
+    dial.last().client.receive({
+      type: "event",
+      event: { eventId: 1, ts: 1, kind: "session:created", ptyId: null, sessionId: "s1", payload: "{}" },
+    });
+    // A 0.17 Core's row: same shape, the old name. It must not be read as an id.
+    dial.last().client.receive({
+      type: "event",
+      event: { eventId: 2, ts: 1, kind: "task:created", ptyId: null, taskId: "t1", payload: "{}" },
+    } as never);
+
+    await vi.waitFor(() => expect(seen.map((e) => e.eventId)).toEqual([1, 2]));
+    expect(seen[0]?.sessionId).toBe("s1");
+    expect(seen[1]?.sessionId).toBeNull();
+    expect("taskId" in (seen[1] as object)).toBe(false);
+  });
+
   it("advances the cursor on an empty tail, because the marker is authoritative", async () => {
     const core = remoteRig();
-    core.eventLog.appendEvent("task:created", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:created", "{}", { sessionId: "t1" });
     const storage = new InMemoryCoreLinkCursorStorage();
     storage.setItem(coreLinkCursorStorageKey(URL_A), "0");
     const { client: c } = makeClient(core, { storage });
@@ -164,12 +187,12 @@ describe("DurableCoreClient", () => {
 
     await c.connect();
     await c.ptySubscribe("pty-7");
-    core.eventLog.appendEvent("task:updated", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:updated", "{}", { sessionId: "t1" });
     await vi.waitFor(() => expect(c.getLastEventId()).toBe(1));
 
     // The Core goes away, and something happens while this client cannot see it.
     dial.last().server.close();
-    core.eventLog.appendEvent("session:finished", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:finished", "{}", { sessionId: "t1" });
 
     await vi.waitFor(() => expect(disconnected).toHaveBeenCalled());
     await vi.waitFor(() => expect(dial.pairs).toHaveLength(2));
@@ -294,8 +317,8 @@ describe("DurableCoreClient", () => {
 
   it("resumes a restarted client's timeline from the store it was given", async () => {
     const core = remoteRig();
-    core.eventLog.appendEvent("task:created", "{}", { taskId: "t1" });
-    core.eventLog.appendEvent("task:updated", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:created", "{}", { sessionId: "t1" });
+    core.eventLog.appendEvent("session:updated", "{}", { sessionId: "t1" });
     const storage = new InMemoryCoreLinkCursorStorage();
 
     const first = makeClient(core, { storage });
@@ -305,7 +328,7 @@ describe("DurableCoreClient", () => {
 
     // A second client — a restarted process — handed the same store. It asks for
     // the tail past what its predecessor saw, not for the whole log.
-    core.eventLog.appendEvent("session:finished", "{}", { taskId: "t1" });
+    core.eventLog.appendEvent("session:finished", "{}", { sessionId: "t1" });
     const second = makeClient(core, { storage });
     const seen: number[] = [];
     second.client.onEvent(({ event }) => seen.push(event.eventId));
@@ -326,7 +349,7 @@ describe("DurableCoreClient", () => {
     // writable yet is dropped, and a client that dropped its subscribe never
     // receives an event again.
     rig = startCoreRig();
-    rig.eventLog.appendEvent("task:created", "{}", { taskId: "t1" });
+    rig.eventLog.appendEvent("session:created", "{}", { sessionId: "t1" });
     const dial = rig.dialer();
     client = new DurableCoreClient({
       url: URL_A,
