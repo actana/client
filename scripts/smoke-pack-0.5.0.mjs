@@ -3,6 +3,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -36,9 +37,31 @@ function run(cwd, command, args, env = {}) {
   return (result.stdout ?? "").trim();
 }
 
-if (spawnSync("pnpm", ["--version"], { encoding: "utf8" }).status !== 0) {
-  fail("pnpm not found on PATH");
+// pack-0.5.0.mjs calls plain `pnpm`. When it is not on PATH, put a shim that runs
+// `corepack pnpm` in front of PATH for every child; if that cannot work either, fail
+// with the reason instead of letting the caller believe the pack ran.
+function ensurePnpm() {
+  if (spawnSync("pnpm", ["--version"], { encoding: "utf8" }).status === 0) return;
+  const probe = spawnSync("corepack", ["pnpm", "--version"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: { ...process.env, COREPACK_ENABLE_DOWNLOAD_PROMPT: "0" },
+  });
+  if (probe.status !== 0) {
+    const reason = probe.error?.message ?? (probe.stderr || probe.stdout || `exit ${probe.status}`).trim();
+    fail(`pnpm is not on PATH and corepack pnpm is unavailable: ${reason}`);
+  }
+  const shimDir = mkdtempSync(join(tmpdir(), "actana-smoke-pnpm-"));
+  const shim = join(shimDir, "pnpm");
+  writeFileSync(shim, '#!/bin/sh\nexec corepack pnpm "$@"\n');
+  chmodSync(shim, 0o755);
+  process.on("exit", () => rmSync(shimDir, { recursive: true, force: true }));
+  process.env.PATH = `${shimDir}${delimiter}${process.env.PATH ?? ""}`;
+  process.env.COREPACK_ENABLE_DOWNLOAD_PROMPT = "0";
+  console.log(`smoke-pack-0.5.0: pnpm not on PATH, running through corepack pnpm ${probe.stdout.trim()}`);
 }
+
+ensurePnpm();
 
 run(repoRoot, process.execPath, [packScript]);
 
