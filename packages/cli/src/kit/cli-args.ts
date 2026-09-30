@@ -225,7 +225,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       else if (name === "--base-url") parsed.baseUrl = value;
       else if (name === "--top-k") parsed.topK = value;
       else if (name === "--keyword-weight") parsed.keywordWeight = value;
-      // Repeatable, unlike the other three: `--kind task:created --kind
+      // Repeatable, unlike the other three: `--kind session:created --kind
       // pty:exit` is a filter somebody will build up, and the alternative — one
       // comma-joined string — puts a second syntax inside a flag value.
       else if (name === "--kind") parsed.kind.push(value);
