@@ -127,6 +127,42 @@ export function pairingStoreContract(factory: () => PairingStore): void {
     });
   });
 
+  describe("releaseAttempt", () => {
+    it("gives back the attempt a claim reserved", async () => {
+      await store.createSession(mintInput());
+      await store.claimAttempt("ps_1", NOW);
+      await store.releaseAttempt("ps_1");
+      expect((await store.listSessions())[0]?.attempts).toBe(0);
+    });
+
+    it("never takes the count below zero", async () => {
+      await store.createSession(mintInput());
+      await store.releaseAttempt("ps_1");
+      expect((await store.listSessions())[0]?.attempts).toBe(0);
+    });
+
+    it("ignores a session it does not have", async () => {
+      await expect(store.releaseAttempt("ps_nobody")).resolves.toBeUndefined();
+    });
+
+    it("lets a consume follow a released claim made at the cap", async () => {
+      await store.createSession(mintInput({ attemptCap: 2 }));
+      await store.claimAttempt("ps_1", NOW);
+      await store.claimAttempt("ps_1", NOW);
+      await store.releaseAttempt("ps_1");
+      expect(await store.consume("ps_1", NOW)).toBe(true);
+    });
+
+    it("leaves the cap standing for claims that are not released", async () => {
+      await store.createSession(mintInput({ attemptCap: 2 }));
+      await store.claimAttempt("ps_1", NOW);
+      await store.claimAttempt("ps_1", NOW);
+      await store.releaseAttempt("ps_1");
+      await store.claimAttempt("ps_1", NOW);
+      expect(await store.claimAttempt("ps_1", NOW)).toEqual({ ok: false, reason: "exhausted" });
+    });
+  });
+
   describe("consume", () => {
     it("spends once and refuses the replay", async () => {
       await store.createSession(mintInput());
