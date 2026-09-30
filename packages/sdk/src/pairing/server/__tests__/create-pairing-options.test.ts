@@ -58,7 +58,7 @@ function freePort(): Promise<number> {
 type Rig = {
   store: PairingStore;
   pairing: ReturnType<typeof createPairing>;
-  openSession(label?: string): Promise<{ sessionId: string; code: string }>;
+  openSession(label?: string, when?: { now: number; ttlMs: number }): Promise<{ sessionId: string; code: string }>;
   redeem(redemption: { sessionId: string; code: string }): Promise<{ status: number; body: string; csrKey: string }>;
 };
 
@@ -94,14 +94,15 @@ async function startRig(
   return {
     store,
     pairing,
-    openSession: async (label = "laptop") => {
+    openSession: async (label = "laptop", when) => {
       const code = generatePairingCode();
       const sessionId = `ps_${Math.random().toString(16).slice(2, 10)}`;
       await store.createSession({
         id: sessionId,
         label,
         codeHash: hashPairingCode({ key: codeKey, sessionId, code }),
-        now: Date.now(),
+        now: when?.now ?? Date.now(),
+        ...(when ? { ttlMs: when.ttlMs } : {}),
       });
       return { sessionId, code };
     },
@@ -147,5 +148,106 @@ describe("createPairing with none of the new options", () => {
     expect(claims.exp - Date.now()).toBeLessThanOrEqual(365 * DAY_MS);
     const sweep = rig.pairing.startRevocationSweep();
     sweep.stop();
+  }, 30_000);
+});
+
+describe("the audit option", () => {
+  it("receives an issued record with the session, label and issued certSerial", async () => {
+    const records: Record<string, unknown>[] = [];
+    const rig = await startRig({ audit: (record) => records.push(record) });
+    const { sessionId, code } = await rig.openSession("desk");
+
+    const res = await rig.redeem({ sessionId, code });
+
+    expect(res.status).toBe(200);
+    expect(records).toHaveLength(1);
+    const issued = records[0]!;
+    expect(issued).toMatchObject({ outcome: "issued", sessionId, label: "desk" });
+    expect(issued.certSerial).toEqual(expect.stringMatching(/^[0-9a-f]+$/i));
+    expect(Object.keys(issued).sort()).toEqual(["at", "certSerial", "label", "outcome", "peer", "sessionId"]);
+  }, 30_000);
+
+  it("receives a wrong-code refusal with its reason and the wrong codes counted", async () => {
+    const records: Record<string, unknown>[] = [];
+    const rig = await startRig({ audit: (record) => records.push(record) });
+    const { sessionId } = await rig.openSession("desk");
+
+    const res = await rig.redeem({ sessionId, code: "ZZZZ-ZZZZ" });
+
+    expect(res.status).toBe(403);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      outcome: "refused",
+      reason: "wrong-code",
+      sessionId,
+      label: "desk",
+      attempts: 1,
+    });
+  }, 30_000);
+
+  it("receives unknown-session, expired and revoked refusals", async () => {
+    const records: Record<string, unknown>[] = [];
+    const rig = await startRig({ audit: (record) => records.push(record) });
+    const expired = await rig.openSession("old", { now: Date.now() - 60_000, ttlMs: 1_000 });
+    const revoked = await rig.openSession("gone");
+    await rig.store.revoke({ kind: "session", sessionId: revoked.sessionId, at: Date.now() });
+
+    await rig.redeem({ sessionId: "ps_nobody", code: "AAAA-AAAA" });
+    await rig.redeem(expired);
+    await rig.redeem(revoked);
+
+    expect(records.map((r) => [r.outcome, r.reason])).toEqual([
+      ["refused", "unknown-session"],
+      ["refused", "expired"],
+      ["refused", "revoked"],
+    ]);
+    expect(records[1]).toMatchObject({ sessionId: expired.sessionId, label: "old" });
+    expect(records[2]).toMatchObject({ sessionId: revoked.sessionId, label: "gone" });
+  }, 30_000);
+
+  it("receives a rate-limited record once a peer exceeds its window", async () => {
+    const records: Record<string, unknown>[] = [];
+    const rig = await startRig({ audit: (record) => records.push(record) });
+
+    for (let i = 0; i < 11; i++) await rig.redeem({ sessionId: "ps_nobody", code: "AAAA-AAAA" });
+
+    expect(records.filter((r) => r.outcome === "rate-limited")).toHaveLength(1);
+    expect(records.at(-1)).toMatchObject({ outcome: "rate-limited", reason: "peer" });
+  }, 60_000);
+
+  it("never hands the sink a pairing code, a bearer or a private key", async () => {
+    const records: Record<string, unknown>[] = [];
+    const rig = await startRig({ audit: (record) => records.push(record) });
+    const { sessionId, code } = await rig.openSession();
+    const wrong = await rig.openSession();
+
+    const wrongRes = await rig.redeem({ sessionId: wrong.sessionId, code: "ZZZZ-ZZZZ" });
+    const okRes = await rig.redeem({ sessionId, code });
+    const bearer = (JSON.parse(okRes.body) as { bearer: string }).bearer;
+
+    const written = JSON.stringify(records);
+    expect(records).toHaveLength(2);
+    expect(written).not.toContain(code);
+    expect(written).not.toContain("ZZZZ-ZZZZ");
+    expect(written).not.toContain(bearer);
+    expect(written).not.toContain(bearer.split(".")[0]!);
+    expect(written).not.toContain("PRIVATE KEY");
+    expect(written).not.toContain(okRes.csrKey.split("\n")[1]!);
+    expect(written).not.toContain(wrongRes.csrKey.split("\n")[1]!);
+    expect(written).not.toContain(material.bearerSecret);
+    expect(written).not.toContain(material.caKey.split("\n")[1]!);
+  }, 30_000);
+
+  it("still answers the client when the sink throws", async () => {
+    const rig = await startRig({
+      audit: () => {
+        throw new Error("audit disk full");
+      },
+    });
+    const { sessionId, code } = await rig.openSession();
+
+    const res = await rig.redeem({ sessionId, code });
+
+    expect(res.status).toBe(200);
   }, 30_000);
 });
