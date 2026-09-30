@@ -29,6 +29,10 @@ import {
   type RevocationLogger,
 } from "./revocation.ts";
 
+export { logPairingAuditFor } from "../audit.ts";
+export type { PairingAuditLogger, PairingAuditSink } from "../audit.ts";
+export type { RevocationLogger } from "./revocation.ts";
+
 /** Product-specific cert and bearer naming. */
 export type PairingProductNames = CertNaming & {
   /** Bearer `iss` prefix, e.g. `core:` or `search:`. */
@@ -93,6 +97,8 @@ export type PairingComposition<Grant = unknown> = {
   startRevocationSweep(): PairingRevocationSweep;
 };
 
+const MAX_DATE_MS = 8.64e15;
+
 const NEUTRAL_NAMES: PairingProductNames = {
   caCommonName: "actana-pairing-ca",
   clientCommonName: "actana-paired-client",
@@ -123,10 +129,16 @@ function clientCertVerified(req: IncomingMessage): boolean {
  * Wire pairing for a product server: gate, redeem route, and revocation sweep.
  */
 export function createPairing<Grant = unknown>(opts: CreatePairingOptions<Grant>): PairingComposition<Grant> {
-  // A NaN or non-positive lifetime would sign a bearer that never verifies (or
-  // one already expired) and only fail at the first client — refuse it here.
-  if (opts.bearerDays !== undefined && !(Number.isFinite(opts.bearerDays) && opts.bearerDays > 0)) {
-    throw new RangeError(`createPairing: bearerDays must be a finite number above 0, got ${String(opts.bearerDays)}`);
+  // A NaN, non-positive or overflowing lifetime would sign a bearer that never
+  // verifies (or one already expired) and only fail at the first client — refuse
+  // it here. The upper bound is the last instant a Date can hold.
+  if (opts.bearerDays !== undefined) {
+    const expiry = Date.now() + opts.bearerDays * 24 * 60 * 60 * 1000;
+    if (!(opts.bearerDays > 0) || !(expiry <= MAX_DATE_MS)) {
+      throw new RangeError(
+        `createPairing: bearerDays must be above 0 and expire within the range of a Date, got ${String(opts.bearerDays)}`,
+      );
+    }
   }
   const names = opts.names ?? NEUTRAL_NAMES;
   const openPaths: readonly OpenPathSpec[] = opts.openPaths ?? [PAIRING_REDEEM_PATH];

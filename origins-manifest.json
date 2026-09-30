@@ -637,7 +637,7 @@
       "sourcePath": "packages/sdk/src/pairing/server/index.ts",
       "destPath": "packages/sdk/src/pairing/server/index.ts",
       "commit": "848269c",
-      "sha256": "e62482ab931dfc013868e9a9382b586e0a71d3bb292447be1befdc671e04e2c1",
+      "sha256": "63aceb85ce5ce6f79e0b4ae32a3bba4c3983250850680d346bff8ad0f07840b0",
       "category": "pairing",
       "note": "T-210: createPairing composition root — client-original; actana/client#12 adds audit, logger and bearerDays options"
     },

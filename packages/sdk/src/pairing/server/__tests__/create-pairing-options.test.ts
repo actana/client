@@ -16,7 +16,7 @@ import { mintFreshMaterial, type PersistedMaterial } from "../../material-store.
 import { createMemoryPairingStore } from "../../stores/memory.ts";
 import type { PairingStore } from "../../store-port.ts";
 import { PAIRING_REDEEM_PATH } from "../../wire.ts";
-import { createPairing, type CreatePairingOptions } from "../index.ts";
+import { createPairing, logPairingAuditFor, type CreatePairingOptions } from "../index.ts";
 
 const TEST_NAMES: CertNaming = {
   caCommonName: "test-pairing-ca",
@@ -33,9 +33,10 @@ beforeAll(async () => {
   material = await mintFreshMaterial(["127.0.0.1"], { names: TEST_NAMES });
 }, 30_000);
 
-afterEach(() => {
-  server?.close();
+afterEach(async () => {
+  const closing = server;
   server = null;
+  if (closing) await new Promise<void>((resolve) => closing.close(() => resolve()));
 });
 
 function freePort(): Promise<number> {
@@ -133,7 +134,7 @@ async function startRig(
 }
 
 describe("createPairing with none of the new options", () => {
-  it("issues a 365-day bearer and accepts a redemption and a sweep with no sink or logger", async () => {
+  it("regression guard: issues a 365-day bearer and accepts a redemption and a sweep with no sink or logger", async () => {
     const rig = await startRig();
     const { sessionId, code } = await rig.openSession();
     const before = Date.now();
@@ -236,6 +237,18 @@ describe("the audit option", () => {
     expect(written).not.toContain(wrongRes.csrKey.split("\n")[1]!);
     expect(written).not.toContain(material.bearerSecret);
     expect(written).not.toContain(material.caKey.split("\n")[1]!);
+  }, 30_000);
+
+  it("emits pairing.attempt through the exported logPairingAuditFor", async () => {
+    const lines: [string, Record<string, unknown>][] = [];
+    const rig = await startRig({ audit: logPairingAuditFor({ info: (event, record) => lines.push([event, record]) }) });
+    const { sessionId, code } = await rig.openSession("desk");
+
+    await rig.redeem({ sessionId, code });
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]![0]).toBe("pairing.attempt");
+    expect(lines[0]![1]).toMatchObject({ outcome: "issued", sessionId, label: "desk" });
   }, 30_000);
 
   it("still answers the client when the sink throws", async () => {
@@ -359,7 +372,7 @@ describe("the bearerDays option", () => {
     expect(claims.exp - Date.now()).toBeLessThanOrEqual(DAY_MS / 2);
   }, 30_000);
 
-  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])("refuses bearerDays %s before serving anyone", (days) => {
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 1e306])("refuses bearerDays %s before serving anyone", (days) => {
     expect(() =>
       createPairing({
         store: createMemoryPairingStore(),
