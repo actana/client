@@ -275,6 +275,8 @@ describe("actana session start", () => {
       resume: async () => fakeStartedSession(),
       logs: async () => ({ sessionId: "session_1", ptyId: "pty_1", screen: "a screen", raw: "raw" }),
       send: async () => true,
+      wait: async () => fakeStartedSession(),
+      sendAndWait: async () => fakeStartedSession(),
       kill: async () => ({ ptyId: "pty_1", killed: true }),
       list: async () => [row()],
     });
@@ -285,6 +287,8 @@ describe("actana session start", () => {
       ["session", "send", "session_1", "hi", "--json", "--verbose"],
       ["session", "kill", "session_1", "--json", "--verbose"],
       ["session", "ls", "--json", "--verbose"],
+      ["session", "wait", "session_1", "--json", "--verbose"],
+      ["session", "send", "session_1", "hi", "--wait", "--json", "--verbose"],
     ]) {
       const run = await cli().run(argv, { sessions: gateway });
       const where = argv.join(" ");

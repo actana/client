@@ -569,7 +569,7 @@
       "sha256": "2d9810b4451306dd6919e5d0d188a5edf58485634bb21777a65767179fdc5f5a",
       "destSha256": "3179bc1a623ae91e69374fcd4ed492a6c5937062c55621d30351b92ec9c3c8f1",
       "category": "cli",
-      "note": "T-217: payload in packages/cli/data/orchestration-skill.json"
+      "note": "T-217: payload in packages/cli/data/orchestration-skill.json. client#10: the payload there says sessionId where the Control twin (packages/shared/src/orchestration-skill-payload.ts) says taskId; diverges until actana/control#598 renames its twin in the same wave"
     },
     {
       "sourceRepo": "actana/control",
