@@ -228,6 +228,16 @@ class PostgresPairingStore<Grant> implements PairingStore<Grant> {
     return { ok: false, reason: refusalReason(session, now.getTime()) };
   }
 
+  async releaseAttempt(sessionId: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE ${this.pairingCode}
+       SET attempts = greatest(attempts - 1, 0)
+       WHERE id = $1
+         AND consumed_at IS NULL`,
+      [sessionId],
+    );
+  }
+
   async consume(sessionId: string, now: Date): Promise<boolean> {
     const at = now.toISOString();
     const claimed = await this.pool.query(

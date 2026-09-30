@@ -227,6 +227,10 @@ export function createPairingRedeemHandler<Grant = unknown>(
       return sendRefusal(res, PAIRING_REFUSED);
     }
 
+    // The code matched, so this claim's reservation was never a wrong guess:
+    // hand it back before anything else can fail (#14).
+    await opts.store.releaseAttempt(sessionId);
+
     try {
       await assertSignableCsr(csr);
     } catch (err) {
