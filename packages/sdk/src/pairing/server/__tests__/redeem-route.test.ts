@@ -396,6 +396,46 @@ describe("the defences", () => {
     expect((await redeem(rig, { sessionId, code, csr: csrPem })).status).toBe(200);
   }, 30_000);
 
+  it("pairs on the right code after four wrong ones (#14)", async () => {
+    const rig = await startServer();
+    const { sessionId, code } = await rig.openSession();
+    const { csrPem } = await generateClientCsr("laptop");
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const wrong = await redeem(rig, { sessionId, code: "ZZZZ-ZZZZ", csr: csrPem });
+      expect(wrong.status).toBe(403);
+    }
+    const right = await redeem(rig, { sessionId, code, csr: csrPem });
+
+    expect(right.status).toBe(200);
+    const listed = await rig.store.listSessions();
+    expect(listed.find((s) => s.id === sessionId)?.consumedAt).not.toBeNull();
+  }, 30_000);
+
+  it("does not charge an attempt for the right code with a bad CSR (#14)", async () => {
+    const rig = await startServer();
+    const { sessionId, code } = await rig.openSession();
+
+    const bad = await redeem(rig, { sessionId, code, csr: "-----BEGIN CERTIFICATE REQUEST-----\nnope\n" });
+
+    expect(bad.status).toBe(400);
+    const listed = await rig.store.listSessions();
+    expect(listed.find((s) => s.id === sessionId)?.attempts).toBe(0);
+  }, 30_000);
+
+  it("charges only real mismatches: the right code's claim leaves the count where it was (#14)", async () => {
+    const rig = await startServer();
+    const { sessionId, code } = await rig.openSession();
+    const { csrPem } = await generateClientCsr("laptop");
+
+    await redeem(rig, { sessionId, code: "ZZZZ-ZZZZ", csr: csrPem });
+    await redeem(rig, { sessionId, code: "ZZZZ-ZZZZ", csr: csrPem });
+    await redeem(rig, { sessionId, code, csr: "-----BEGIN CERTIFICATE REQUEST-----\nnope\n" });
+
+    const listed = await rig.store.listSessions();
+    expect(listed.find((s) => s.id === sessionId)?.attempts).toBe(2);
+  }, 30_000);
+
   it("lets only one of two simultaneous redemptions win", async () => {
     const rig = await startServer();
     const { sessionId, code } = await rig.openSession();
