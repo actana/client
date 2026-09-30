@@ -7,7 +7,12 @@
     "actana/control": {
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "remote": "control/main",
-      "repo": "https://github.com/actana/control"
+      "repo": "https://github.com/actana/control",
+      "testPin": {
+        "commit": "aa03266415e969829b4616861a13c11cb04d1142",
+        "branch": "feat/556-core-session-rename",
+        "note": "Test-only vendored Core (packages/sdk/scripts/vendor-control-pin.mjs). An unmerged actana/control draft commit (PR 598): the SDK Session rename needs a Core that speaks Session to run its real-Core tests. Moves to the merged commit once control 598 merges. Lifted entries keep commit d7eeb65 as their provenance; their divergence is recorded per entry."
+      }
     },
     "actana/search": {
       "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
