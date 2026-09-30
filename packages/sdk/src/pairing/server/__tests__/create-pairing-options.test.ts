@@ -239,8 +239,10 @@ describe("the audit option", () => {
   }, 30_000);
 
   it("still answers the client when the sink throws", async () => {
+    let calls = 0;
     const rig = await startRig({
       audit: () => {
+        calls++;
         throw new Error("audit disk full");
       },
     });
@@ -248,6 +250,7 @@ describe("the audit option", () => {
 
     const res = await rig.redeem({ sessionId, code });
 
+    expect(calls).toBe(1);
     expect(res.status).toBe(200);
   }, 30_000);
 });
@@ -407,6 +410,7 @@ describe("the revocation sweep's ready promise", () => {
     });
 
     const sweep = rig.pairing.startRevocationSweep();
+    expect(sweep.ready).toBeInstanceOf(Promise);
     await sweep.ready;
     sweep.stop();
 
