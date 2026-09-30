@@ -328,7 +328,7 @@
       "destPath": "packages/cli/src/run-client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "99716ddd54f41c76fd33170b4e14b738c750787f85d2dfc7071b9b63cd751ee4",
-      "destSha256": "2b9148a25892e42729fa7ec8dbb7ed70511fe045545e7fda25fa66a55ab3aab7",
+      "destSha256": "f21ed0605b5b9e390f2baf852727174020593e1e500eeac91f421cc497241b14",
       "category": "cli",
       "note": "T-217: client nouns only; machine dispatch deferred"
     },
@@ -681,7 +681,7 @@
       "sha256": "28e2ceda49e3cf0233ff110bf456dde213595e2c70fb80358479260dfaa92bb4",
       "liftTableRow": "server/preauth-gate",
       "category": "pairing",
-      "destSha256": "2678e96ff3555893c7ee4aafae899709d9841a14c267cc6864c9742cce45457a"
+      "destSha256": "82fd8b2b4a98fa651fa63a5e4e31fac90cdb75e3f5d02e49e0e0e749ce69d41b"
     },
     {
       "sourceRepo": "actana/control",
