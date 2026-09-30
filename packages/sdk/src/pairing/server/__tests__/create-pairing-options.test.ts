@@ -7,7 +7,7 @@
 
 import * as https from "node:https";
 import { Server } from "node:net";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { decodeBearer } from "../../bearer.ts";
 import { generateClientCsr, type CertNaming } from "../../cert-material.ts";
 import { generatePairingCode } from "../../code.ts";
@@ -249,5 +249,84 @@ describe("the audit option", () => {
     const res = await rig.redeem({ sessionId, code });
 
     expect(res.status).toBe(200);
+  }, 30_000);
+});
+
+describe("the logger option", () => {
+  type Line = { level: "error" | "info"; event: string; fields?: Record<string, unknown> };
+  const capture = () => {
+    const lines: Line[] = [];
+    return {
+      lines,
+      logger: {
+        error: (event: string, fields?: Record<string, unknown>) =>
+          lines.push({ level: "error", event, ...(fields ? { fields } : {}) }),
+        info: (event: string, fields?: Record<string, unknown>) =>
+          lines.push({ level: "info", event, ...(fields ? { fields } : {}) }),
+      },
+    };
+  };
+
+  it("receives core-pairing.revocation.unreadable once when the store cannot be read", async () => {
+    const { lines, logger } = capture();
+    const base = createMemoryPairingStore();
+    const broken: PairingStore = {
+      ...base,
+      revokedSerials: async () => {
+        throw new Error("pairing store is corrupt");
+      },
+    };
+    const rig = await startRig({ logger }, broken);
+
+    const sweep = rig.pairing.startRevocationSweep();
+    await vi.waitFor(() => expect(rig.pairing.gate.revocations.isFailClosed()).toBe(true));
+    await rig.pairing.gate.revocations.refresh();
+    sweep.stop();
+
+    expect(lines).toEqual([
+      {
+        level: "error",
+        event: "core-pairing.revocation.unreadable",
+        fields: { error: "pairing store is corrupt", effect: "every pairing refused" },
+      },
+    ]);
+  }, 30_000);
+
+  it("receives pairing.revoked with the serial when a live pairing is revoked", async () => {
+    const { lines, logger } = capture();
+    const rig = await startRig({ logger });
+    const { sessionId, code } = await rig.openSession();
+    const issued = await rig.redeem({ sessionId, code });
+    expect(issued.status).toBe(200);
+    const [client] = [...(await rig.store.listClients())];
+    const sweep = rig.pairing.startRevocationSweep();
+    await vi.waitFor(() => expect(rig.pairing.gate.revocations.isFailClosed()).toBe(false));
+
+    await rig.store.revoke({ kind: "client", certSerial: client!.certSerial, at: Date.now() });
+    await vi.waitFor(() => expect(lines.length).toBeGreaterThan(0), { timeout: 5_000 });
+    sweep.stop();
+
+    expect(lines).toEqual([{ level: "info", event: "pairing.revoked", fields: { certSerials: [client!.certSerial] } }]);
+  }, 30_000);
+
+  it("never logs a pairing code, a bearer or a private key", async () => {
+    const { lines, logger } = capture();
+    const rig = await startRig({ logger });
+    const { sessionId, code } = await rig.openSession();
+    const issued = await rig.redeem({ sessionId, code });
+    const bearer = (JSON.parse(issued.body) as { bearer: string }).bearer;
+    const [client] = [...(await rig.store.listClients())];
+    const sweep = rig.pairing.startRevocationSweep();
+    await vi.waitFor(() => expect(rig.pairing.gate.revocations.isFailClosed()).toBe(false));
+    await rig.store.revoke({ kind: "client", certSerial: client!.certSerial, at: Date.now() });
+    await vi.waitFor(() => expect(lines.length).toBeGreaterThan(0), { timeout: 5_000 });
+    sweep.stop();
+
+    const written = JSON.stringify(lines);
+    expect(written).not.toContain(code);
+    expect(written).not.toContain(bearer);
+    expect(written).not.toContain("PRIVATE KEY");
+    expect(written).not.toContain(issued.csrKey.split("\n")[1]!);
+    expect(written).not.toContain(material.bearerSecret);
   }, 30_000);
 });

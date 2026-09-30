@@ -153,7 +153,7 @@ export class PairingRevocations {
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       if (!this.failClosed) {
-        this.logger.error("pairing.revocation.unreadable", { error, effect: "every pairing refused" });
+        this.logger.error("core-pairing.revocation.unreadable", { error, effect: "every pairing refused" });
       }
       this.failClosed = true;
       return { ok: false, error };
