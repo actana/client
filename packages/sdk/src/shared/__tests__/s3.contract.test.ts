@@ -19,6 +19,7 @@ runCoreSharedContract("S3 mode on an in-memory S3", async () => {
       endpoint: s3.endpoint,
       bucket: s3.bucket,
       prefix: "cores/core-a",
+      listPageSize: 5,
       credentials: { get: async () => key },
     }),
     dispose: () => s3.close(),

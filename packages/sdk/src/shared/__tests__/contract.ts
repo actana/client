@@ -83,5 +83,144 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
         await expectCode(shared.put("dir/", "x"), "is-folder");
       });
     });
+
+    describe("list", () => {
+      it("is empty on an empty Shared folder, and for a folder that is not there", async () => {
+        expect(await shared.list("")).toEqual([]);
+        expect(await shared.list("nothing/here/")).toEqual([]);
+      });
+
+      it("lists the direct children only: folders first, then files, each by name", async () => {
+        await shared.put("b.txt", "bb");
+        await shared.put("a.txt", "a");
+        await shared.put("z/deep/x.txt", "x");
+        await shared.put("m/y.txt", "y");
+        const root = await shared.list("");
+        expect(root.map((e) => `${e.kind}:${e.path}`)).toEqual(["folder:m", "folder:z", "file:a.txt", "file:b.txt"]);
+        expect(root.find((e) => e.path === "b.txt")?.size).toBe(2);
+        expect(root.find((e) => e.path === "b.txt")?.modifiedAt).toBeInstanceOf(Date);
+        expect((await shared.list("z")).map((e) => `${e.kind}:${e.path}`)).toEqual(["folder:z/deep"]);
+        expect((await shared.list("z/deep/")).map((e) => `${e.kind}:${e.path}`)).toEqual(["file:z/deep/x.txt"]);
+      });
+
+      it("does not mistake a look-alike sibling for a child", async () => {
+        await shared.put("docs/a.txt", "1");
+        await shared.put("docs-old/b.txt", "2");
+        expect((await shared.list("docs")).map((e) => e.path)).toEqual(["docs/a.txt"]);
+      });
+
+      it("lists a folder bigger than one page of the store", async () => {
+        const names = Array.from({ length: 12 }, (_, i) => `many/f${String(i).padStart(2, "0")}.txt`);
+        for (const name of names) await shared.put(name, name);
+        expect((await shared.list("many")).map((e) => e.path)).toEqual(names);
+      });
+    });
+
+    describe("mkdir", () => {
+      it("makes an empty folder that lists, and keeps it when asked twice", async () => {
+        await shared.mkdir("empty");
+        await shared.mkdir("empty/");
+        expect(await shared.list("")).toEqual([{ path: "empty", kind: "folder" }]);
+        expect(await shared.list("empty")).toEqual([]);
+      });
+
+      it("makes nested folders, so the parents are folders too", async () => {
+        await shared.mkdir("a/b/c");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["a"]);
+        expect((await shared.list("a")).map((e) => e.path)).toEqual(["a/b"]);
+        expect((await shared.list("a/b")).map((e) => e.path)).toEqual(["a/b/c"]);
+      });
+
+      it("leaves a folder's contents alone", async () => {
+        await shared.put("keep/f.txt", "f");
+        await shared.mkdir("keep");
+        expect(text((await shared.get("keep/f.txt")).body)).toBe("f");
+      });
+
+      it("accepts the root as a no-op", async () => {
+        await shared.mkdir("");
+        expect(await shared.list("")).toEqual([]);
+      });
+    });
+
+    describe("rm", () => {
+      it("deletes a file and says not-found for one that is not there", async () => {
+        await shared.put("x.txt", "x");
+        await shared.rm("x.txt");
+        await expectCode(shared.get("x.txt"), "not-found");
+        await expectCode(shared.rm("x.txt"), "not-found");
+      });
+
+      it("deletes a folder with everything in it, and only that folder", async () => {
+        await shared.put("gone/a.txt", "a");
+        await shared.put("gone/sub/b.txt", "b");
+        await shared.mkdir("gone/empty");
+        await shared.put("gone-not/c.txt", "c");
+        await shared.put("gone.txt", "d");
+        await shared.rm("gone/");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["gone-not", "gone.txt"]);
+        await expectCode(shared.get("gone/sub/b.txt"), "not-found");
+      });
+
+      it("deletes an empty folder made by mkdir", async () => {
+        await shared.mkdir("e");
+        await shared.rm("e/");
+        expect(await shared.list("")).toEqual([]);
+      });
+
+      it("refuses the root, and a folder that is not there", async () => {
+        await shared.put("keep.txt", "k");
+        await expectCode(shared.rm(""), "invalid-path");
+        await expectCode(shared.rm("nope/"), "not-found");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["keep.txt"]);
+      });
+
+      it("a file path does not delete a folder of that name", async () => {
+        await shared.put("dir/f.txt", "f");
+        await expectCode(shared.rm("dir"), "not-found");
+        expect(text((await shared.get("dir/f.txt")).body)).toBe("f");
+      });
+    });
+
+    describe("paths never escape the Shared folder", () => {
+      const bad = [
+        "../outside.txt",
+        "a/../../outside.txt",
+        "a/../b.txt",
+        "./a.txt",
+        "a/./b.txt",
+        "/etc/passwd",
+        "/abs.txt",
+        "a//b.txt",
+        "..",
+        "../",
+        "a\\b.txt",
+        "a\u0000b.txt",
+        "a\nb.txt",
+      ];
+
+      it.each(bad)("refuses %j in every operation and writes nothing", async (path) => {
+        await shared.put("keep.txt", "k");
+        const calls: Promise<unknown>[] = [
+          shared.get(path),
+          shared.put(path, "x"),
+          shared.list(path),
+          shared.mkdir(path),
+          shared.rm(path),
+          shared.rm(`${path}/`),
+          shared.move(path, "dest.txt"),
+          shared.move("keep.txt", path),
+        ];
+        for (const call of calls) await expectCode(call, "invalid-path");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["keep.txt"]);
+        expect(text((await shared.get("keep.txt")).body)).toBe("k");
+      });
+
+      it("does not decode percent-escapes: %2e%2e is a name, not a parent", async () => {
+        await shared.put("keep.txt", "k");
+        await shared.put("%2e%2e/x.txt", "x");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["%2e%2e", "keep.txt"]);
+      });
+    });
   });
 }

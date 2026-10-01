@@ -65,6 +65,7 @@ export function seaweedfsHarness(): SeaweedfsHarness | undefined {
           endpoint: env.endpoint!,
           bucket: env.bucket,
           prefix: `${env.prefix}/${coreId}`,
+          listPageSize: 5,
           credentials,
         }),
         dispose: async () => {},
