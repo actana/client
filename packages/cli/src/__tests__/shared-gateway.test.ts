@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { CoreFilesFetch, CoreFilesRequest, CoreLinkEvent } from "@actana/sdk/core";
 import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
-import { makeCliFixture, registerCore, sentinelBlobText, type CliFixture } from "./cli-harness.ts";
+import { fakeSessionGateway, makeCliFixture, registerCore, sentinelBlobText, type CliFixture } from "./cli-harness.ts";
 import type { CoreLinkClient } from "../core/core-connection.ts";
 import {
   createOpenSharedThroughCore,
@@ -77,16 +77,26 @@ function fakeLink(opts: { cap?: number; reportsTip?: boolean } = {}) {
   return { ...state, client, state };
 }
 
-/** A Files sender that remembers PUTs and answers GET/HEAD from what it holds. */
-function fakeFiles() {
+/** A Files sender that remembers PUTs and answers GET, HEAD and list from what it holds. */
+function fakeFiles(opts: { onWrite?: (sharedPath: string, size: number) => void } = {}) {
   const requests: CoreFilesRequest[] = [];
   const files = new Map<string, string>();
   const fetch: CoreFilesFetch = async (req) => {
     requests.push(req);
-    const path = new URL(req.url).searchParams.get("path") ?? "";
+    const url = new URL(req.url);
+    const path = url.searchParams.get("path") ?? "";
     if (req.method === "PUT") {
-      files.set(path, await new Response(req.body ?? null).text());
+      const body = await new Response(req.body ?? null).text();
+      files.set(path, body);
+      opts.onWrite?.(path.replace(/^shared\//, ""), body.length);
       return new Response('{"type":"done"}\n', { status: 200 });
+    }
+    if (url.pathname === "/v1/files/list") {
+      const prefix = path.endsWith("/") ? path : `${path}/`;
+      const lines = [...files]
+        .filter(([name]) => name.startsWith(prefix) && !name.slice(prefix.length).includes("/"))
+        .map(([name, body]) => JSON.stringify({ type: "entry", path: name, kind: "file", size: body.length, mtime: 1 }));
+      return new Response([...lines, '{"type":"done"}'].join("\n"), { status: 200 });
     }
     const body = files.get(path);
     if (body === undefined) return new Response(JSON.stringify({ code: "not-found", error: "no such file" }), { status: 404 });
@@ -238,5 +248,83 @@ describe("the shared command, with the default mode", () => {
     expect(get.code).toBe(EXIT_OK);
     expect(get.out.join("\n")).toContain("# done");
     expect(link.state.closed).toBe(2);
+  });
+});
+
+describe("send, wait and read end to end through the Shared folder of a Core", () => {
+  let fixture: CliFixture | null = null;
+  afterEach(() => {
+    fixture?.cleanup();
+    fixture = null;
+  });
+
+  /** A Core whose Files API and event log are one: a write is a file and a `shared:changed` event. */
+  function core() {
+    const link = fakeLink();
+    let eventId = 0;
+    const files = fakeFiles({
+      onWrite: (path, size) => {
+        eventId += 1;
+        link.append({ ...sharedEvent(eventId, path), payload: JSON.stringify({ path, size, mtime: 1, deleted: false }) });
+      },
+    });
+    const open = createOpenSharedThroughCore({
+      connect: async () => link.client as CoreLinkClient,
+      createFilesFetch: () => files.fetch,
+      pollIntervalMs: 5,
+    });
+    /** What the harness does on the Core: write its report into the home's shared folder. */
+    return { link, files, open, bump: (path: string, body: string) => {
+      files.files.set(`shared/${path}`, body);
+      eventId += 1;
+      link.append({ ...sharedEvent(eventId, path), payload: JSON.stringify({ path, size: body.length, mtime: 1, deleted: false }) });
+    } };
+  }
+
+  it("sends a follow-up with the block, waits on the watcher for its report, and reads it back", async () => {
+    fixture = makeCliFixture();
+    registerCore(fixture.paths, "prod", sentinelBlobText(PROD));
+    const c = core();
+    const typed: string[] = [];
+    const sessions = fakeSessionGateway({
+      list: async () => [{ sessionId: "s1", title: "t", harness: "claude-code", status: "running", ptyId: "p", live: true, writable: null, lock: null, updatedAt: 0 }],
+      send: async (_id, text) => {
+        typed.push(text);
+        // The harness answers a moment after it was typed to: its report lands in ~/shared on the Core.
+        setTimeout(() => c.bump("sessions/s1/report-2.md", "# turn 2\nthe answer\nACT-REPORT-END\n"), 30);
+        return true;
+      },
+    });
+    // Turn 1 was reported before: send must number this one 2.
+    c.bump("sessions/s1/report-1.md", "# turn 1\nACT-REPORT-END\n");
+
+    const waited = await fixture.run(["session", "send", "s1", "now", "the", "tests", "--enter", "--wait", "--wait-timeout", "5"], { sessions, shared: c.open });
+    const read = await fixture.run(["shared", "get", "sessions/s1/report-2.md"], { shared: c.open });
+
+    expect(waited.code, waited.err.join("\n")).toBe(EXIT_OK);
+    expect(waited.out).toEqual(["sessions/s1/report-2.md"]);
+    expect(typed).toHaveLength(1);
+    expect(typed[0]).toContain("now the tests [Actana standard block v1]");
+    expect(typed[0]).toContain("write your report to ~/shared/sessions/s1/report-2.md");
+    expect(read.code, read.err.join("\n")).toBe(EXIT_OK);
+    expect(read.out.join("\n")).toContain("the answer");
+    // The report was learnt from the event log, and read over the Files API: no command ran on the Core.
+    expect(c.files.requests.some((r) => r.url.includes("/v1/files?path=shared%2Fsessions%2Fs1%2Freport-2.md"))).toBe(true);
+    expect(c.link.state.subscribes.length).toBeGreaterThan(1);
+  });
+
+  it("settles a wait on a report that was already there, then reads it", async () => {
+    fixture = makeCliFixture();
+    registerCore(fixture.paths, "prod", sentinelBlobText(PROD));
+    const c = core();
+    c.bump("sessions/s1/report-1.md", "done\nACT-REPORT-END\n");
+    const sessions = fakeSessionGateway({
+      list: async () => [{ sessionId: "s1", title: "t", harness: "claude-code", status: "finished", ptyId: null, live: false, writable: null, lock: null, updatedAt: 0 }],
+    });
+
+    const waited = await fixture.run(["session", "wait", "s1", "--wait-timeout", "5", "--json"], { sessions, shared: c.open });
+
+    expect(waited.code, waited.err.join("\n")).toBe(EXIT_OK);
+    expect(JSON.parse(waited.out.join("\n"))).toMatchObject({ turn: 1, settled: true, report: "done\nACT-REPORT-END\n" });
   });
 });

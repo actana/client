@@ -174,6 +174,8 @@ export function sharedChangedEvents(
 export type SharedThroughCoreDeps = {
   connect: CoreConnectFn;
   createFilesFetch: (tls: CoreLinkTlsMaterial | null) => CoreFilesFetch;
+  /** Between two polls of `watch`. Default {@link DEFAULT_WATCH_POLL_MS}. */
+  pollIntervalMs?: number;
 };
 
 /** Build the through-the-Core factory over a link and a Files sender. Tests inject fakes. */
@@ -187,7 +189,11 @@ export function createOpenSharedThroughCore(deps: SharedThroughCoreDeps): OpenSh
       fetch: deps.createFilesFetch(connection.tls),
       events: sharedChangedEvents(client, opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
     });
-    return { shared, close: () => client.close() };
+    return {
+      shared,
+      ...(deps.pollIntervalMs === undefined ? {} : { pollIntervalMs: deps.pollIntervalMs }),
+      close: () => client.close(),
+    };
   };
 }
 
