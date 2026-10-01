@@ -201,9 +201,24 @@ describe("main(): failures end on stderr with an exit code", () => {
     expect(chunks.err).toContain("NoReportError");
   });
 
-  it("a pairing without the expected fingerprint is refused by the SDK before any code is sent (exit 4)", async () => {
-    // The real pairWithCore: it needs the fingerprint first. Nothing is listening on the port; the
-    // refusal on a bad fingerprint argument comes before any network use.
+  it("a pairing with no fingerprint is a usage error (exit 2) and pairWithCore is never called", async () => {
+    const { chunks, io } = sink();
+    let called = false;
+    const code = await main(
+      ["pair"],
+      { ACTANA_CORE_ADDRESS: "core.invalid:8765", ACTANA_PAIRING_CODE: "ps_1:ABCD-EFGH", ACTANA_BLOB_OUT: join(dir, "b") },
+      io,
+      { pair: async () => ((called = true), blob) },
+    );
+    expect(code).toBe(2);
+    expect(chunks.err).toContain("set ACTANA_CA_FINGERPRINT");
+    expect(called).toBe(false);
+    expect(() => readFileSync(join(dir, "b"))).toThrow();
+  });
+
+  it("a malformed fingerprint is refused by the SDK before any code is sent (exit 4)", async () => {
+    // The real pairWithCore. Nothing is listening on the port; the refusal on a bad fingerprint
+    // argument comes before any network use.
     const { chunks, io } = sink();
     const code = await main(["pair"], { ACTANA_CORE_ADDRESS: "127.0.0.1:9", ACTANA_PAIRING_CODE: "ps_1:ABCD-EFGH", ACTANA_CA_FINGERPRINT: "not-a-fingerprint", ACTANA_BLOB_OUT: join(dir, "b") }, io);
     expect(code).toBe(4);
