@@ -184,6 +184,15 @@ describe("watch through the Core's event log", () => {
     expect(await events.tip()).toBe(5);
   });
 
+  it("learns the tip from the replay marker in one subscribe, without reading the log", async () => {
+    const link = fakeLink({ cap: 2 });
+    for (let id = 1; id <= 5; id += 1) link.append(sharedEvent(id, `f${id}.md`));
+    const events = sharedChangedEvents(link.client as CoreLinkClient);
+
+    expect(await events.tip()).toBe(5);
+    expect(link.state.subscribes).toEqual([Number.MAX_SAFE_INTEGER]);
+  });
+
   it("fails when the link drops mid-replay, with the reason, instead of waiting for ever", async () => {
     const link = fakeLink();
     const events = sharedChangedEvents(link.client as CoreLinkClient);
