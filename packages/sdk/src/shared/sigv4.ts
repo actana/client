@@ -27,8 +27,8 @@ const canonicalQuery = (query: Record<string, string>): string =>
     .map(([k, v]) => `${k}=${v}`)
     .join("&");
 
-function signature(creds: SigV4Credentials, day: string, region: string, toSign: string): string {
-  const signingKey = hmac(hmac(hmac(hmac(`AWS4${creds.secretAccessKey}`, day), region), "s3"), "aws4_request");
+function signature(creds: SigV4Credentials, day: string, region: string, service: string, toSign: string): string {
+  const signingKey = hmac(hmac(hmac(hmac(`AWS4${creds.secretAccessKey}`, day), region), service), "aws4_request");
   return createHmac("sha256", signingKey).update(toSign).digest("hex");
 }
 
@@ -41,6 +41,7 @@ export interface SignedRequest {
  * Sign a request with an Authorization header. `path` is the canonical (already encoded) path.
  * Every header in `headers` is signed, together with host, x-amz-content-sha256, x-amz-date and
  * the session token; `unsignedHeaders` ride along unsigned (S3 allows that).
+ * `service` defaults to `s3`; Generic STS uses `sts`.
  */
 export function signRequest(input: {
   method: string;
@@ -53,7 +54,10 @@ export function signRequest(input: {
   credentials: SigV4Credentials;
   region: string;
   nowMs: number;
+  /** AWS service name in the credential scope. Default `s3`. */
+  service?: string;
 }): SignedRequest {
+  const service = input.service ?? "s3";
   const date = amzDate(input.nowMs);
   const day = date.slice(0, 8);
   const payloadHash = sha256(input.body ?? "");
@@ -65,9 +69,9 @@ export function signRequest(input: {
   const canonicalHeaders = names.map((n) => `${n}:${signed[n]}\n`).join("");
   const signedHeaders = names.join(";");
   const canonical = [input.method, input.path, query, canonicalHeaders, signedHeaders, payloadHash].join("\n");
-  const scope = `${day}/${input.region}/s3/aws4_request`;
+  const scope = `${day}/${input.region}/${service}/aws4_request`;
   const toSign = ["AWS4-HMAC-SHA256", date, scope, sha256(canonical)].join("\n");
-  const sig = signature(input.credentials, day, input.region, toSign);
+  const sig = signature(input.credentials, day, input.region, service, toSign);
   const { host: _host, ...sendHeaders } = signed;
   return {
     url: `${input.endpoint.origin}${input.path}${query ? `?${query}` : ""}`,
@@ -102,5 +106,5 @@ export function presignGetUrl(input: {
   const q = canonicalQuery(query);
   const canonical = ["GET", input.path, q, `host:${input.endpoint.host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
   const toSign = ["AWS4-HMAC-SHA256", date, scope, sha256(canonical)].join("\n");
-  return `${input.endpoint.origin}${input.path}?${q}&X-Amz-Signature=${signature(input.credentials, day, input.region, toSign)}`;
+  return `${input.endpoint.origin}${input.path}?${q}&X-Amz-Signature=${signature(input.credentials, day, input.region, "s3", toSign)}`;
 }
