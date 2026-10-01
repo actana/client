@@ -442,13 +442,13 @@ describe("core-link-frames", () => {
     // the `exec` frame (issue 266), 0.17.0 is the stamped write (issue
     // 289) and 0.18.0 is the Task-to-Session rename (client#10): frames rather
     // than ready capabilities, so none of them the additive case D11 carves out.
-    it("is 0.18.0 — moved for `exec` (#266), the stamped write (#289) and the Task-to-Session rename (client#10), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
-      expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.18.0");
+    it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Task-to-Session rename (client#10) and the Shared-folder frames (client#4), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
+      expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.19.0");
     });
 
-    it("marks a 0.17.0 Core incompatible — the rename is a hard cut, so the gate refuses before a frame goes out", () => {
-      expect(coreLinkProtocolCompatible("0.17.0")).toBe(false);
-      expect(coreLinkProtocolCompatible("0.18.0")).toBe(true);
+    it("marks a 0.18.0 Core incompatible — the Shared-folder frames carry a key, so the gate refuses before one goes out", () => {
+      expect(coreLinkProtocolCompatible("0.18.0")).toBe(false);
+      expect(coreLinkProtocolCompatible("0.19.0")).toBe(true);
     });
 
     it("leaves a Core that announces no multiConnection capability fully compatible — absence is a supported state, not drift", () => {

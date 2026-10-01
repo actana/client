@@ -77,6 +77,8 @@ describe("CoreClient", () => {
       // no HTTP surface for one to point at. Null rather than absent: the field
       // is always reported, and "this Core has no file routes" is an answer.
       files: null,
+      // Likewise: this rig's Core announces no `shared` capability (client#4).
+      shared: null,
       coreId: "core_abc",
       bearerExpiresAt: expect.any(Number),
     });
