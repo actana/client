@@ -63,6 +63,15 @@ describe("browser-safe subpath @actana/sdk/core/link-frames", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("never reaches the Node-only CoreShared (./shared) or key issuer (./shared-key) modules", () => {
+    const entry = (packageJson.exports as Record<string, string>)[SUBPATH] as string;
+    const { files } = walk(join(sdkRoot, entry));
+    expect(files.filter((file) => /\/src\/shared(-key)?(\/|\.ts$)/.test(file))).toEqual([]);
+    // The guard can see them: the same walk from ./shared finds node:crypto and the like.
+    const shared = walk(join(sdkRoot, (packageJson.exports as Record<string, string>)["./shared"] as string));
+    expect(shared.offenders).toContain("node:crypto");
+  });
+
   it("bundles for the browser with Vite without undici, ws, node: imports or Node stubs", async () => {
     // vite is only in the lockfile through vitest, so resolve it from there (no new dependency).
     const vitePath = createRequire(createRequire(import.meta.url).resolve("vitest")).resolve("vite");

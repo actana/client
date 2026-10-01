@@ -9,7 +9,8 @@
       "@actana/sdk/core": ["src/core.ts"],
       "@actana/sdk/core/link-frames": ["src/core/browser.ts"],
       "@actana/sdk/search": ["src/search.ts"],
-      "@actana/sdk/shared-key": ["src/shared-key.ts"]
+      "@actana/sdk/shared-key": ["src/shared-key.ts"],
+      "@actana/sdk/shared": ["src/shared.ts"]
     },
     "target": "ES2022",
     "lib": ["ES2022"],
