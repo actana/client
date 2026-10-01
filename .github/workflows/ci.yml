@@ -148,6 +148,12 @@ jobs:
       - name: Run the CoreShared contract suite
         working-directory: packages/sdk
         run: pnpm exec vitest run src/shared/__tests__/s3.contract.test.ts --reporter=verbose
+      # The Panel recipe's S3 steps (docs/panel-recipe.md): the real issuer, keys and S3 mode on the same
+      # SeaweedFS and signing key. The Core end is a fake; this job has no Core.
+      - name: Run the Panel recipe's S3 steps
+        env:
+          SEAWEEDFS_KEY_ID: ci-key
+        run: pnpm exec vitest run examples/panel-recipe/__tests__/seaweedfs.test.mjs --reporter=verbose
       - name: SeaweedFS log
         if: failure()
         run: docker logs seaweedfs || true
