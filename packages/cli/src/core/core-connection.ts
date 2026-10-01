@@ -163,7 +163,7 @@ export type OpenCoreResult =
  * The failure is reported **on stderr only, never as a JSON object on stdout**,
  * and that is a deliberate departure from `core status --json`. Reachability is
  * what `core status` is *about*, so "unreachable" is its answer and belongs in
- * its payload. For `project ls` it is not an answer at all — a list that could
+ * its payload. For `session ls` it is not an answer at all — a list that could
  * not be fetched is not an empty list and is not an error-shaped list, and a
  * consumer that got `{"error": …}` on the stream it parses as data would have
  * to learn to tell one from the other on every read. The exit code is the

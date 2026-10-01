@@ -8,8 +8,8 @@
 // without a Core, and what keeps "the CLI is an SDK consumer" a one-file claim
 // rather than an assumption spread across the command tree.
 //
-// It is also the seam #129's later tickets widen: `session`, `project`,
-// `harness` and `events` are all "connect, ask, print", and they will each want
+// It is also the seam #129's later tickets widen: `session`,
+// `harness`, `events` and `files` are all "connect, ask, print", and they will each want
 // the client this builds rather than a second way of building one.
 
 import { CoreClient } from "@actana/sdk/core";
