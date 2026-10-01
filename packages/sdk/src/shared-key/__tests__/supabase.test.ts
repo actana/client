@@ -7,14 +7,17 @@ import {
   createSupabaseKeyIssuer,
   SHARED_KEY_LIFETIME_SECONDS,
   SharedKeyIssueError,
+  supabaseCoreStorageRlsSql,
   type SupabaseKeyIssuerOptions,
 } from "../index.ts";
 import { createFakeSupabase } from "./fake-supabase.ts";
 
 const SERVICE_ROLE = "service-role-MASTER-never-leave";
 const JWT_SECRET = "jwt-secret-MASTER-never-leave";
-const NOW = Date.UTC(2026, 9, 1, 12, 0, 0);
+const ANON_KEY = "anon-key-public";
 const PROJECT = "https://proj.supabase.co";
+const PROJECT_REF = "proj";
+const NOW = Date.UTC(2026, 9, 1, 12, 0, 0);
 
 function setup(extra: Partial<SupabaseKeyIssuerOptions> = {}, fakeOpts: Parameters<typeof createFakeSupabase>[0] = {}) {
   const fake = createFakeSupabase(fakeOpts);
@@ -22,6 +25,7 @@ function setup(extra: Partial<SupabaseKeyIssuerOptions> = {}, fakeOpts: Paramete
     url: PROJECT,
     serviceRoleKey: SERVICE_ROLE,
     jwtSecret: JWT_SECRET,
+    anonKey: ANON_KEY,
     bucket: "actana-shared",
     prefix: "cores",
     fetch: fake.fetch,
@@ -47,8 +51,9 @@ describe("createSupabaseKeyIssuer", () => {
     const { issuer, requests } = setup();
     const key = await issuer.issue("core-a");
 
-    expect(key.accessKeyId).toBe("user-1");
-    expect(key.secretAccessKey).toBe("supabase-user-jwt");
+    // R1: Supabase S3 session-token auth wants project ref + anon key + JWT.
+    expect(key.accessKeyId).toBe(PROJECT_REF);
+    expect(key.secretAccessKey).toBe(ANON_KEY);
     expect(key.expiresAt).toEqual(new Date(NOW + SHARED_KEY_LIFETIME_SECONDS * 1000));
     const { header, claims } = verifyHs256(key.sessionToken, JWT_SECRET);
     expect(header).toEqual({ alg: "HS256", typ: "JWT" });
@@ -74,13 +79,21 @@ describe("createSupabaseKeyIssuer", () => {
     });
   });
 
+  it("uses an explicit projectRef when the URL host is not the ref", async () => {
+    const { issuer } = setup({ url: "https://db.example.com", projectRef: "myref" });
+    const key = await issuer.issue("core-a");
+    expect(key.accessKeyId).toBe("myref");
+    expect(key.secretAccessKey).toBe(ANON_KEY);
+  });
+
   it("updates an existing machine user's storage restriction on the wire", async () => {
     const { issuer, requests } = setup(
       {},
       { users: [{ id: "user-existing", email: coreMachineUserEmail("core-a"), app_metadata: {} }] },
     );
     const key = await issuer.issue("core-a");
-    expect(key.accessKeyId).toBe("user-existing");
+    expect(key.accessKeyId).toBe(PROJECT_REF);
+    expect(key.secretAccessKey).toBe(ANON_KEY);
     const update = requests.find((r) => r.method === "PUT");
     expect(update?.url).toBe(`${PROJECT}/auth/v1/admin/users/user-existing`);
     expect(update?.body).toEqual({
@@ -89,6 +102,26 @@ describe("createSupabaseKeyIssuer", () => {
         ...coreStorageRestriction("actana-shared", "cores", "core-a"),
       },
     });
+    const { claims } = verifyHs256(key.sessionToken, JWT_SECRET);
+    expect(claims.sub).toBe("user-existing");
+  });
+
+  it("finds an existing machine user on page 2 of the Admin list (R3)", async () => {
+    const fillers: { id: string; email: string; app_metadata: Record<string, unknown> }[] = [];
+    for (let i = 0; i < 200; i++) {
+      fillers.push({ id: `filler-${i}`, email: `filler-${i}@example.com`, app_metadata: {} });
+    }
+    fillers.push({ id: "user-page-2", email: coreMachineUserEmail("core-a"), app_metadata: {} });
+    const { issuer, requests } = setup({}, { users: fillers, perPage: 200 });
+    const key = await issuer.issue("core-a");
+    expect(key.accessKeyId).toBe(PROJECT_REF);
+    const { claims } = verifyHs256(key.sessionToken, JWT_SECRET);
+    expect(claims.sub).toBe("user-page-2");
+    const listUrls = requests.filter((r) => r.method === "GET").map((r) => r.url);
+    expect(listUrls.some((u) => u.includes("page=1"))).toBe(true);
+    expect(listUrls.some((u) => u.includes("page=2"))).toBe(true);
+    const update = requests.find((r) => r.method === "PUT");
+    expect(update?.url).toBe(`${PROJECT}/auth/v1/admin/users/user-page-2`);
   });
 
   it("returns only the four SharedKey fields: no master material", async () => {
@@ -98,14 +131,14 @@ describe("createSupabaseKeyIssuer", () => {
     const dump = JSON.stringify(key) + String(Object.values(key));
     expect(dump).not.toContain(SERVICE_ROLE);
     expect(dump).not.toContain(JWT_SECRET);
+    // Anon key and project ref are public S3 credentials; they are the returned key.
+    expect(dump).toContain(ANON_KEY);
+    expect(dump).toContain(PROJECT_REF);
     expect(Object.isFrozen(key)).toBe(true);
   });
 
   it("leaks no master material in an Admin API error", async () => {
     const { issuer } = setup({}, { createError: { status: 401, message: `bad ${SERVICE_ROLE}` } });
-    // create fails with 401 (not 422), list will also get createError only on POST — need network on list
-    // Force create to fail non-422 and list to fail by using createError then empty list path:
-    // createError returns 401; ensureUser then lists; list succeeds with empty users → create error path.
     const error = await issuer.issue("core-a").catch((e: unknown) => e);
     expect(error).toBeInstanceOf(SharedKeyIssueError);
     const text = `${(error as Error).message}\n${(error as Error).stack}\n${JSON.stringify(error)}`;
@@ -126,5 +159,20 @@ describe("createSupabaseKeyIssuer", () => {
     await expect(issuer.issue(id)).rejects.toThrow(/invalid core id/);
     expect(requests).toHaveLength(0);
     expect(() => assertValidCoreId(id)).toThrow(SharedKeyIssueError);
+  });
+});
+
+describe("supabaseCoreStorageRlsSql (R2)", () => {
+  it("ships SELECT/INSERT/UPDATE/DELETE policies that read allowed_prefix from the JWT", () => {
+    const sql = supabaseCoreStorageRlsSql("actana-shared");
+    expect(sql).toMatch(/CREATE POLICY/i);
+    for (const cmd of ["SELECT", "INSERT", "UPDATE", "DELETE"] as const) {
+      expect(sql.toUpperCase()).toContain(cmd);
+    }
+    expect(sql).toContain("storage.objects");
+    expect(sql).toContain("actana-shared");
+    expect(sql).toContain("allowed_prefix");
+    expect(sql).toContain("auth.jwt()");
+    expect(sql).toContain("app_metadata");
   });
 });

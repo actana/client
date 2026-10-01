@@ -18,6 +18,8 @@ export interface FakeSupabaseUser {
 export interface FakeSupabaseOptions {
   /** Pre-seeded users (create will 422 and fall through to list+update). */
   users?: FakeSupabaseUser[];
+  /** Page size for GET /admin/users (default 200). */
+  perPage?: number;
   networkError?: Error;
   createError?: { status: number; message: string };
 }
@@ -77,9 +79,17 @@ export function createFakeSupabase(options: FakeSupabaseOptions = {}): {
       return new Response(JSON.stringify(user), { status: 200, headers: { "content-type": "application/json" } });
     }
 
-    // GET list
+    // GET list (honours page + per_page so R3 can put a user on page 2)
     if (method === "GET" && href.includes("/auth/v1/admin/users")) {
-      return new Response(JSON.stringify({ users }), { status: 200, headers: { "content-type": "application/json" } });
+      const u = new URL(href);
+      const page = Math.max(1, Number(u.searchParams.get("page") ?? "1") || 1);
+      const perPage = Math.max(1, Number(u.searchParams.get("per_page") ?? String(options.perPage ?? 200)) || 200);
+      const start = (page - 1) * perPage;
+      const slice = users.slice(start, start + perPage);
+      return new Response(JSON.stringify({ users: slice }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
     }
 
     // PUT update

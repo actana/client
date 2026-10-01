@@ -10,7 +10,7 @@ key's life) via `createSharedKeyProvider`.
 | SeaweedFS (default) | `createSeaweedfsKeyIssuer` | RSA signing key | OIDC token `sub` = core id; role policy in control's SeaweedFS IAM |
 | Generic STS | `createStsKeyIssuer` | IAM access key + secret | `AssumeRole` + inline session policy for the Core prefix (SigV4, no AWS SDK) |
 | Cloudflare R2 | `createR2KeyIssuer` | Cloudflare API token | Temporary credentials with `prefixes: [<prefix>/<core-id>/]` |
-| Supabase | `createSupabaseKeyIssuer` | Service-role key + JWT secret | One Auth user per Core; JWT is `sessionToken`; `app_metadata` carries the storage prefix |
+| Supabase | `createSupabaseKeyIssuer` | Service-role key + JWT secret | One Auth user per Core; JWT is `sessionToken`; S3 key = project ref + anon key; RLS on `storage.objects` must read `allowed_prefix` (see below) |
 
 The returned `SharedKey` is only `{ accessKeyId, secretAccessKey, sessionToken, expiresAt }`.
 Master material never appears in that object or in thrown `SharedKeyIssueError`s.
@@ -55,21 +55,72 @@ Calls `POST /accounts/{account_id}/r2/temp-access-credentials` with
 ## Supabase
 
 ```ts
-import { createSupabaseKeyIssuer } from "@actana/sdk/shared-key";
+import { createSupabaseKeyIssuer, supabaseCoreStorageRlsSql } from "@actana/sdk/shared-key";
 
 const issuer = createSupabaseKeyIssuer({
   url: process.env.SUPABASE_URL!,
   serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   jwtSecret: process.env.SUPABASE_JWT_SECRET!,
+  anonKey: process.env.SUPABASE_ANON_KEY!,
+  // projectRef defaults to the first label of the URL hostname
   bucket: "actana-shared",
   prefix: "cores",
 });
 ```
 
 Ensures an Auth user `core-<id>@actana.shared` whose `app_metadata.allowed_prefix`
-(and `storage_policy`) is `cores/<id>/`, then mints an HS256 JWT (the
-`sessionToken`). Storage RLS must allow only that prefix (same idea as the
-prototype's `machineUsers`).
+(and `storage_policy`) is `cores/<id>/`, then mints an HS256 JWT. The returned
+`SharedKey` matches [Supabase S3 session-token authentication](https://supabase.com/docs/guides/storage/s3/authentication):
+`accessKeyId` = project ref, `secretAccessKey` = anon key (both public),
+`sessionToken` = that JWT.
+
+**The issuer restricts nothing by itself.** Without an RLS policy on
+`storage.objects` that compares the object name to
+`auth.jwt() -> 'app_metadata' ->> 'allowed_prefix'`, the JWT is an ordinary
+`authenticated` token limited only by whatever the project already grants that
+role. Apply the SQL from `supabaseCoreStorageRlsSql(bucket)` once per project
+(also exported from `@actana/sdk/shared-key`):
+
+```sql
+-- Actana Shared-folder: one Core per Auth user.
+-- The issuer sets auth.jwt() -> 'app_metadata' ->> 'allowed_prefix' to
+-- '<prefix>/<core-id>/'. Without these policies the issued JWT is not limited.
+-- Run once per project (adjust the bucket name).
+
+CREATE POLICY actana_core_select ON storage.objects
+  FOR SELECT TO authenticated
+  USING (
+    bucket_id = 'actana-shared'
+    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+  );
+
+CREATE POLICY actana_core_insert ON storage.objects
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'actana-shared'
+    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+  );
+
+CREATE POLICY actana_core_update ON storage.objects
+  FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'actana-shared'
+    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+  )
+  WITH CHECK (
+    bucket_id = 'actana-shared'
+    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+  );
+
+CREATE POLICY actana_core_delete ON storage.objects
+  FOR DELETE TO authenticated
+  USING (
+    bucket_id = 'actana-shared'
+    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+  );
+```
+
+(Same text as `supabaseCoreStorageRlsSql("actana-shared")`.)
 
 ## Isolation tests
 

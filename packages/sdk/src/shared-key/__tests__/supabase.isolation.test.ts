@@ -25,12 +25,13 @@ describe("Supabase issuer: wire isolation to the Core's own prefix", () => {
       url: "https://proj.supabase.co",
       serviceRoleKey: "srv",
       jwtSecret: "jwt",
+      anonKey: "anon",
       bucket: BUCKET,
       prefix: PREFIX,
       fetch: fake.fetch,
       now: () => NOW,
     });
-    await issuer.issue(A);
+    const key = await issuer.issue(A);
 
     const create = fake.requests.find((r) => r.method === "POST");
     expect(create).toBeDefined();
@@ -47,6 +48,15 @@ describe("Supabase issuer: wire isolation to the Core's own prefix", () => {
     expect(body.app_metadata.allowed_prefix).toBe(expected.allowed_prefix);
     expect(body.app_metadata.storage_policy).toEqual(expected.storage_policy);
     expect(body.app_metadata.allowed_prefix).toBe(coreRootPrefix(PREFIX, A));
+
+    // S3 session-token shape (R1) and JWT claims never name Core B (comment 2).
+    expect(key.accessKeyId).toBe("proj");
+    expect(key.secretAccessKey).toBe("anon");
+    const claims = JSON.parse(Buffer.from(key.sessionToken.split(".")[1]!, "base64url").toString()) as {
+      app_metadata: { allowed_prefix: string };
+    };
+    expect(claims.app_metadata.allowed_prefix).toBe(expected.allowed_prefix);
+    expect(JSON.stringify(claims)).not.toContain(B);
 
     const dumped = JSON.stringify(body.app_metadata);
     // Negative: never names Core B or the bucket / shared prefix root.
