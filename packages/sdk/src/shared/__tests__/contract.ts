@@ -182,6 +182,123 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
       });
     });
 
+    describe("move", () => {
+      it("renames a file in the same folder", async () => {
+        await shared.put("docs/old.txt", "content");
+        await shared.move("docs/old.txt", "docs/new.txt");
+        expect(text((await shared.get("docs/new.txt")).body)).toBe("content");
+        await expectCode(shared.get("docs/old.txt"), "not-found");
+        expect((await shared.list("docs")).map((e) => e.path)).toEqual(["docs/new.txt"]);
+      });
+
+      it("moves a file into another folder, which then exists", async () => {
+        await shared.put("a.txt", "a");
+        await shared.move("a.txt", "x/y/a.txt");
+        expect(text((await shared.get("x/y/a.txt")).body)).toBe("a");
+        await expectCode(shared.get("a.txt"), "not-found");
+      });
+
+      it("moves a folder with everything in it: files, subfolders and empty folders", async () => {
+        await shared.put("old/a.txt", "a");
+        await shared.put("old/sub/deep/b.txt", "b");
+        await shared.mkdir("old/empty");
+        await shared.put("old-not/c.txt", "c");
+        await shared.move("old/", "new/");
+        expect(text((await shared.get("new/a.txt")).body)).toBe("a");
+        expect(text((await shared.get("new/sub/deep/b.txt")).body)).toBe("b");
+        expect((await shared.list("new")).map((e) => e.path)).toEqual(["new/empty", "new/sub", "new/a.txt"]);
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["new", "old-not"]);
+        await expectCode(shared.get("old/a.txt"), "not-found");
+      });
+
+      it("renames an empty folder", async () => {
+        await shared.mkdir("e");
+        await shared.move("e/", "f/");
+        expect(await shared.list("")).toEqual([{ path: "f", kind: "folder" }]);
+      });
+
+      it("moves a folder into another folder", async () => {
+        await shared.put("src/a.txt", "a");
+        await shared.mkdir("dst");
+        await shared.move("src/", "dst/src/");
+        expect(text((await shared.get("dst/src/a.txt")).body)).toBe("a");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["dst"]);
+      });
+
+      it("refuses a taken destination (exists) and changes nothing", async () => {
+        await shared.put("a.txt", "a");
+        await shared.put("b.txt", "b");
+        await expectCode(shared.move("a.txt", "b.txt"), "exists");
+        await shared.put("f1/x.txt", "1");
+        await shared.put("f2/y.txt", "2");
+        await expectCode(shared.move("f1/", "f2/"), "exists");
+        expect(text((await shared.get("b.txt")).body)).toBe("b");
+        expect(text((await shared.get("f1/x.txt")).body)).toBe("1");
+        expect(text((await shared.get("f2/y.txt")).body)).toBe("2");
+      });
+
+      it("refuses a missing source, a folder into itself, the root, and a file-to-folder mix", async () => {
+        await shared.put("d/a.txt", "a");
+        await expectCode(shared.move("nope.txt", "z.txt"), "not-found");
+        await expectCode(shared.move("nope/", "z/"), "not-found");
+        await expectCode(shared.move("d/", "d/inner/"), "invalid-move");
+        await expectCode(shared.move("d/", "d/"), "invalid-move");
+        await expectCode(shared.move("", "x/"), "invalid-path");
+        await expectCode(shared.move("d/", ""), "invalid-path");
+        await expectCode(shared.move("d/a.txt", "d/b/"), "invalid-path");
+        await expectCode(shared.move("d/", "d2"), "invalid-path");
+        expect((await shared.list("d")).map((e) => e.path)).toEqual(["d/a.txt"]);
+      });
+
+      it("does not move a look-alike sibling with the folder", async () => {
+        await shared.put("d/a.txt", "a");
+        await shared.put("d2/b.txt", "b");
+        await shared.move("d/", "e/");
+        expect((await shared.list("")).map((e) => e.path)).toEqual(["d2", "e"]);
+      });
+    });
+
+    describe("upload of a folder tree", () => {
+      it("keeps the tree, including empty folders and nested files", async () => {
+        const written = await shared.upload("drop/", [
+          { path: "readme.md", body: "# hi" },
+          { path: "src/main.ts", body: "main" },
+          { path: "src/lib/util.ts", body: Uint8Array.from([1, 2, 3]) },
+          { path: "assets", folder: true },
+        ]);
+        expect(written).toEqual(["drop/readme.md", "drop/src/main.ts", "drop/src/lib/util.ts", "drop/assets"]);
+        expect(text((await shared.get("drop/src/main.ts")).body)).toBe("main");
+        expect([...(await shared.get("drop/src/lib/util.ts")).body]).toEqual([1, 2, 3]);
+        expect((await shared.list("drop")).map((e) => `${e.kind}:${e.path}`)).toEqual([
+          "folder:drop/assets",
+          "folder:drop/src",
+          "file:drop/readme.md",
+        ]);
+      });
+
+      it("can upload at the root", async () => {
+        await shared.upload("", [{ path: "top/a.txt", body: "a" }]);
+        expect(text((await shared.get("top/a.txt")).body)).toBe("a");
+      });
+
+      it("checks every entry first: one bad path writes nothing", async () => {
+        const bad = [
+          { path: "../escape.txt", body: "x" },
+          { path: "/abs.txt", body: "x" },
+          { path: "a/../../b.txt", body: "x" },
+          { path: "ok/../b.txt", body: "x" },
+        ];
+        for (const entry of bad) {
+          await expectCode(shared.upload("drop", [{ path: "good.txt", body: "g" }, entry]), "invalid-path");
+        }
+        await expectCode(shared.upload("../out", [{ path: "a.txt", body: "a" }]), "invalid-path");
+        await expectCode(shared.upload("/abs", [{ path: "a.txt", body: "a" }]), "invalid-path");
+        await expectCode(shared.upload("drop", [{ path: "a.txt", body: "1" }, { path: "a.txt", body: "2" }]), "invalid-path");
+        await expectCode(shared.upload("drop", [{ path: "dir/", body: "x" }]), "is-folder");
+        expect(await shared.list("")).toEqual([]);
+      });
+    });
+
     describe("paths never escape the Shared folder", () => {
       const bad = [
         "../outside.txt",

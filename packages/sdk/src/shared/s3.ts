@@ -127,13 +127,13 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
   const relativeOf = (key: string): string => key.slice(rootKey.length);
 
   /** Every page of a ListObjectsV2 under `prefix`; with a delimiter it also yields the folders. */
-  async function* listPages(prefix: string, delimiter?: string): AsyncGenerator<ListPage> {
+  async function* listPages(prefix: string, delimiter?: string, pageSize = options.listPageSize): AsyncGenerator<ListPage> {
     let token: string | undefined;
     do {
       const query: Record<string, string> = { "list-type": "2" };
       if (prefix !== "") query.prefix = prefix;
       if (delimiter) query.delimiter = delimiter;
-      if (options.listPageSize) query["max-keys"] = String(options.listPageSize);
+      if (pageSize) query["max-keys"] = String(pageSize);
       if (token) query["continuation-token"] = token;
       const xml = new TextDecoder().decode((await send("GET", undefined, { query })).bytes);
       const objects: Listed[] = [];
@@ -160,6 +160,28 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
     const all: Listed[] = [];
     for await (const page of listPages(prefix)) all.push(...page.objects);
     return all;
+  }
+
+  async function exists(key: string): Promise<boolean> {
+    try {
+      await send("HEAD", key);
+      return true;
+    } catch (error) {
+      if (error instanceof CoreSharedError && error.code === "not-found") return false;
+      throw error;
+    }
+  }
+
+  /** True when anything at all is under `prefix`. */
+  async function anyUnder(prefix: string): Promise<boolean> {
+    for await (const page of listPages(prefix, undefined, 1)) return page.objects.length > 0;
+    return false;
+  }
+
+  /** Server-side copy; S3 can answer 200 and still carry an error in the body. */
+  async function copyKey(from: string, to: string): Promise<void> {
+    const reply = await send("PUT", to, { headers: { "x-amz-copy-source": keyPath(from) } });
+    if (/<Error>/.test(new TextDecoder().decode(reply.bytes))) throw unavailable("copy");
   }
 
   /** Delete the objects at `keys`, stopping at the first failure and saying which were left. */
@@ -231,13 +253,91 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
       const marker = folderPrefix(parsed.relative);
       await deleteKeys([...keys.filter((k) => k !== marker), ...keys.filter((k) => k === marker)]);
     },
+    // S3 has no rename, so a move is copy, then delete. The destination is complete before the first
+    // source is deleted. A failed COPY is rolled back (the source was never touched), so it changes
+    // nothing unless the rollback fails too; a failed DELETE leaves the source part-there and the
+    // destination complete: both are reported by a CoreSharedPartialError listing what is left.
     async move(from, to): Promise<void> {
-      parseSharedPath(from, "from");
-      parseSharedPath(to, "to");
-      throw unavailable("move: not implemented yet");
+      const src = parseSharedPath(from, "from");
+      const dst = parseSharedPath(to, "to");
+      if (src.segments.length === 0 || dst.segments.length === 0) throw new CoreSharedError("invalid-path", "the root cannot be moved or replaced");
+      if (src.folder !== dst.folder) throw new CoreSharedError("invalid-path", "from and to must both name files or both name folders (a folder ends in /)");
+
+      let pairs: { from: string; to: string }[];
+      if (!src.folder) {
+        const fromKey = fileKey(src.relative);
+        if (!(await exists(fromKey))) throw new CoreSharedError("not-found", "not found", { status: 404 });
+        if (await exists(fileKey(dst.relative))) throw new CoreSharedError("exists", "the destination is taken");
+        pairs = [{ from: fromKey, to: fileKey(dst.relative) }];
+      } else {
+        const fromPrefix = folderPrefix(src.relative);
+        const toPrefix = folderPrefix(dst.relative);
+        if (toPrefix.startsWith(fromPrefix)) throw new CoreSharedError("invalid-move", "a folder cannot move into itself");
+        const keys = (await allKeys(fromPrefix)).map((o) => o.key);
+        if (keys.length === 0) throw new CoreSharedError("not-found", "not found", { status: 404 });
+        if (await anyUnder(toPrefix)) throw new CoreSharedError("exists", "the destination is taken");
+        // Contents first, the folder's own marker last, in both phases.
+        keys.sort((a, b) => Number(a === fromPrefix) - Number(b === fromPrefix) || (a < b ? -1 : 1));
+        pairs = keys.map((key) => ({ from: key, to: toPrefix + key.slice(fromPrefix.length) }));
+      }
+
+      const copied: string[] = [];
+      for (const pair of pairs) {
+        try {
+          await copyKey(pair.from, pair.to);
+          copied.push(pair.to);
+        } catch (error) {
+          if (!(error instanceof CoreSharedError)) throw error;
+          const stuck: string[] = [];
+          for (const key of copied) {
+            try {
+              await send("DELETE", key);
+            } catch {
+              stuck.push(key);
+            }
+          }
+          if (stuck.length === 0) throw error; // rolled back: nothing changed
+          throw new CoreSharedPartialError("move", "copy", stuck.map(relativeOf), error);
+        }
+      }
+      const sources = pairs.map((pair) => pair.from);
+      for (let i = 0; i < sources.length; i += 1) {
+        try {
+          await send("DELETE", sources[i] as string);
+        } catch (error) {
+          if (!(error instanceof CoreSharedError)) throw error;
+          throw new CoreSharedPartialError("move", "delete", sources.slice(i).map(relativeOf), error);
+        }
+      }
     },
-    async upload(_destination, _entries: Iterable<SharedUploadEntry>): Promise<string[]> {
-      throw unavailable("upload: not implemented yet");
+
+    async upload(destination, entries: Iterable<SharedUploadEntry>): Promise<string[]> {
+      const dest = parseSharedPath(destination, "destination");
+      // All of it is checked before anything is written.
+      const plan: { relative: string; entry: SharedUploadEntry }[] = [];
+      const seen = new Set<string>();
+      for (const entry of entries) {
+        const parsed = parseSharedPath(entry.path, "entry path");
+        if (parsed.segments.length === 0) throw new CoreSharedError("invalid-path", "an entry needs a path");
+        if ("body" in entry && parsed.folder) throw new CoreSharedError("is-folder", "a file entry's path ends in /");
+        const relative = [...dest.segments, ...parsed.segments].join("/");
+        if (seen.has(relative)) throw new CoreSharedError("invalid-path", "two entries have the same path");
+        seen.add(relative);
+        plan.push({ relative, entry });
+      }
+      const written: string[] = [];
+      for (const { relative, entry } of plan) {
+        try {
+          if ("body" in entry) await send("PUT", fileKey(relative), { body: entry.body });
+          else await send("PUT", folderPrefix(relative), { body: "", unsigned: { "content-type": MARKER_TYPE } });
+          written.push(relative);
+        } catch (error) {
+          if (!(error instanceof CoreSharedError)) throw error;
+          if (written.length === 0) throw error;
+          throw new CoreSharedPartialError("upload", "write", written, error);
+        }
+      }
+      return written;
     },
     async watch(): Promise<SharedWatchResult> {
       throw unavailable("watch: not implemented yet");
