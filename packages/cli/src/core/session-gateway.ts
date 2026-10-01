@@ -36,7 +36,6 @@
 import { CoreClient } from "@actana/sdk/core";
 import {
   CoreSession,
-  CoreSessionAttachError,
   HARNESS_LAUNCH_COMMANDS,
 } from "@actana/sdk/core";
 import { TerminalScreen, DEFAULT_COLS, DEFAULT_ROWS } from "@actana/sdk/core";
@@ -138,26 +137,20 @@ export type SessionOutcome = {
 /**
  * A Session this invocation is connected to, and can wait on.
  *
- * `start` and `resume` produce one by spawning; `wait` and `send --wait` produce
- * one by attaching to a harness that is already running (#289). The fields are
- * the same fields so the two print the same object — and the ones only a spawn
- * can answer say so with `null` rather than with a plausible value.
+ * `start` and `resume` produce one by spawning. `session wait` and `send --wait` no
+ * longer attach to a harness: they settle on the report file in the Shared folder
+ * (client #8, `session-report-wait.ts`), not on a status, so they do not go
+ * through this type.
  */
 export type StartedSession = {
   sessionId: string;
   ptyId: string;
   /**
-   * The harness running in it, as the Core spells it — `null` only when this
-   * invocation attached to a Session whose row the Core did not list, which
-   * is a row deleted out from under a live PTY. The wait does not need it; it is
-   * on the object because a caller reading the result wants to know what it was
-   * talking to.
+   * The harness running in it, as the Core spells it.
    */
   harness: string | null;
   /**
-   * The command the Core was asked to run, after defaulting — `null` on a
-   * Session this invocation attached to rather than started, because the Core
-   * does not publish a running PTY's command.
+   * The command the Core was asked to run, after defaulting.
    */
   command: string | null;
   /**
@@ -175,11 +168,6 @@ export type StartedSession = {
    * working cursor Session shows the status it had before the turn began. An
    * operator told that is reading a quiet table correctly; one who is not has
    * no way to tell it from a harness that never started.
-   *
-   * **`null` on an attached Session** — `session wait` and `send --wait` join a
-   * PTY that is already running, and the Core answers this question on a spawn.
-   * Null is "not asked on this path", not "no", and nothing about waiting reads
-   * it either way (#289 A).
    */
   reportsTurnStart: boolean | null;
   /**
@@ -189,11 +177,9 @@ export type StartedSession = {
    * `timeoutMs` is a deadline the *operator* asked for (`--wait-timeout`) and
    * its expiry is an error, never a status invented here.
    *
-   * **What "settled" counts from depends on how this Session was reached.** A
-   * spawned one has observed no status, so the first it hears is this turn's. An
-   * attached one carries the delivery stamp the Core answered its write with, so
-   * the status that ends the wait is one reported *after* the text went in — not
-   * the one the Session was already parked at (#289 A).
+   * A spawned Session has observed no status, so the first it hears is this
+   * turn's. (`session wait` and `send --wait` do not use this: they wait for the
+   * report file, client #8.)
    */
   wait(opts: { timeoutMs?: number }): Promise<SessionOutcome>;
   /** The rendered transcript, read while the Session is alive. */
@@ -226,26 +212,6 @@ export type SessionGateway = {
    * the text lands and the return is sent somewhere else — or nowhere.
    */
   send(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<boolean>;
-  /**
-   * Attach to a running Session and hand back something to wait on — the
-   * primitive `actana session wait` is (#289 B).
-   *
-   * No text goes in, so there is no delivery to count from: the wait it returns
-   * answers from the status the Session is in when it is already settled, and
-   * otherwise on the next settling status. That is the honest answer to "tell me
-   * when this Session is not working", which is what the verb asks.
-   */
-  wait(sessionId: string): Promise<StartedSession>;
-  /**
-   * Write text into a running Session and hand back a wait for **the turn that
-   * write starts** — one PTY resolution for both, and no window between them.
-   *
-   * The wait counts from the event id the Core stamped the delivery with, so a
-   * Session that was already settled when the text arrived cannot answer it with
-   * the status it was already sitting at (#289 A, and the `settledNow` landmine
-   * that is the reason the stamp exists).
-   */
-  sendAndWait(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<StartedSession>;
   /** Kill the harness running for this Session, whoever started it. */
   kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }>;
   close(): void;
@@ -399,18 +365,6 @@ class CoreLinkSessionGateway implements SessionGateway {
     return this.client.write(ptyId, "\r");
   }
 
-  async wait(sessionId: string): Promise<StartedSession> {
-    return this.attached(sessionId, null);
-  }
-
-  async sendAndWait(
-    sessionId: string,
-    text: string,
-    opts: { enter?: boolean } = {},
-  ): Promise<StartedSession> {
-    return this.attached(sessionId, { text, enter: opts.enter === true });
-  }
-
   async kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }> {
     // Resolved through the Core by Session id, which is what makes killing a
     // Session this CLI did not start ordinary rather than special: the PTY
@@ -424,109 +378,6 @@ class CoreLinkSessionGateway implements SessionGateway {
 
   close(): void {
     this.client.close();
-  }
-
-  // ─── Shared resolution ─────────────────────────────────────────────────────
-
-  /**
-   * Attach to a running Session, optionally deliver text into it first, and wrap
-   * the result as a {@link StartedSession} to wait on.
-   *
-   * **One PTY resolution covers the write and the wait.** `CoreSession.attach`
-   * resolves the Session's live PTY once and wires the byte stream, the exit and
-   * the event log before this method writes a character; the write goes to that
-   * PTY and the wait counts from the id the Core answered it with. There is no
-   * second `findBySession` between them, so there is no window in which the harness
-   * could move, exit, or finish a turn unobserved.
-   *
-   * The delivery is two writes when `--enter` was asked for — the text, then the
-   * carriage return, exactly as `send` has always done it (ADR 0026: this side
-   * appends nothing on its own). Both are stamped and the wait counts from the
-   * **later** stamp, because the turn starts at the return, not at the text.
-   */
-  private async attached(
-    sessionId: string,
-    deliver: { text: string; enter: boolean } | null,
-  ): Promise<StartedSession> {
-    // The archived list as a fallback, because a Session can be archived while
-    // its harness is still running — and `sessionRowsList` is active rows only by
-    // design (ADR 0019). Every other verb that names a live PTY works on such a
-    // Session; refusing it here would make `wait` the odd one out over a row
-    // this only reads two display fields off.
-    const row = await this.findAnySessionRow(sessionId);
-
-    let session: CoreSession;
-    try {
-      session = await CoreSession.attach(this.client, { sessionId });
-    } catch (err) {
-      // A Session with no live PTY is the one failure this path has that the
-      // others do not, and it is `not-running` here for the same reason it is
-      // there: it is a harness that has exited, and the next step is `logs` or
-      // `resume`, not a retry.
-      throw err instanceof CoreSessionAttachError
-        ? new SessionGatewayError("not-running", err.message, { cause: err })
-        : new SessionGatewayError("refused", messageOf(err), { cause: err });
-    }
-
-    let afterEventId = 0;
-    if (deliver !== null) {
-      try {
-        if (deliver.text.length > 0) {
-          const wrote = await session.deliver(deliver.text);
-          if (!wrote.ok) {
-            throw new SessionGatewayError(
-              "not-running",
-              `the Core did not accept the write to session ${sessionId}`,
-            );
-          }
-          afterEventId = Math.max(afterEventId, wrote.deliveryEventId);
-        }
-        if (deliver.enter) {
-          const returned = await session.deliver("\r");
-          if (!returned.ok) {
-            throw new SessionGatewayError(
-              "not-running",
-              `the Core did not accept the carriage return for session ${sessionId}`,
-            );
-          }
-          afterEventId = Math.max(afterEventId, returned.deliveryEventId);
-        }
-        // **A delivery that was not stamped has no cursor, and an uncursored
-        // wait after a delivery is the lie this whole design exists to
-        // prevent** — it would answer from the status the Session was already
-        // parked at, which is last turn's answer with a zero exit.
-        //
-        // The version gate refuses a Core too old to stamp before a frame goes
-        // out. This covers the ways a Core on this version still answers 0: no
-        // event-log port wired, or an `appendEvent` that failed. Both are
-        // documented on `recordSessionDelivery`, and neither is a reason to
-        // guess.
-        //
-        // The text **was delivered** and the message says so, because the next
-        // thing an operator does with a failure here must not be to send it
-        // again.
-        //
-        // Guarded on a write having happened at all: a delivery of nothing is
-        // not a delivery, and it leaves this exactly where a bare `wait` is —
-        // no cursor, because nothing was sent to count from.
-        if ((deliver.text.length > 0 || deliver.enter) && afterEventId === 0) {
-          throw new SessionGatewayError(
-            "refused",
-            `session ${sessionId} took the text, but this Core did not record the delivery in its ` +
-              `event log — so there is no cursor to await this turn from, and waiting would report ` +
-              `the turn before it. The text was delivered; \`actana session logs ${sessionId}\` shows it`,
-          );
-        }
-      } catch (err) {
-        session.dispose();
-        throw err;
-      }
-    }
-
-    return wrap(session, {
-      harness: row?.agent ?? null,
-      afterEventId,
-    });
   }
 
   /** Start a Session, translating the SDK's refusal into a gateway error. */
@@ -567,26 +418,6 @@ class CoreLinkSessionGateway implements SessionGateway {
     return ptyId;
   }
 
-  /**
-   * The Session row for a Session, active **or archived**, or null when this Core
-   * has neither.
-   *
-   * Null rather than a refusal, because the caller is a verb that acts on a live
-   * PTY and reads this row only for two display fields. `resume` still uses
-   * {@link findSessionRow}, where a missing row is genuinely the end of the road: it
-   * needs the harness and the recorded session id to start anything at all.
-   *
-   * The archived list is asked only when the active one did not have it, so the
-   * ordinary path still costs one round trip.
-   */
-  private async findAnySessionRow(sessionId: string): Promise<CoreLinkSessionRow | null> {
-    const { sessions } = await this.client.sessionRowsList();
-    const active = sessions.find((row) => row.sessionId === sessionId);
-    if (active) return active;
-    const archived = await this.client.archivedSessionRowsList();
-    return archived.find((row) => row.sessionId === sessionId) ?? null;
-  }
-
   private async findSessionRow(sessionId: string): Promise<CoreLinkSessionRow> {
     const { sessions } = await this.client.sessionRowsList();
     const row = sessions.find((row) => row.sessionId === sessionId);
@@ -603,22 +434,14 @@ class CoreLinkSessionGateway implements SessionGateway {
  * Present one `CoreSession` as a {@link StartedSession}.
  *
  * `harness` is passed in rather than read off the Session: a spawn knows it
- * because it asked for it, and an attach reads it off the Session row — the Core
- * publishes no harness for a PTY that is already running, and `CoreSession` says
- * so with `null` rather than guessing. Same for `command` and `reportsTurnStart`,
- * which are answers to a `spawn` frame and stay null on the attach path.
- *
- * `afterEventId` is the delivery stamp the wait counts from, and 0 — no cursor —
- * is the spawn path and the bare `session wait`.
+ * because it asked for it.
  */
 function wrap(
   session: CoreSession,
   opts: {
     harness: string | null;
-    afterEventId?: number;
   },
 ): StartedSession {
-  const afterEventId = opts.afterEventId ?? 0;
   return {
     sessionId: session.sessionId,
     ptyId: session.ptyId,
@@ -627,7 +450,6 @@ function wrap(
     reportsTurnStart: session.reportsTurnStart,
     wait: async (waitOpts) => {
       const idle = await session.waitForTurnEnd({
-        ...(afterEventId > 0 ? { afterEventId } : {}),
         ...(waitOpts.timeoutMs ? { timeoutMs: waitOpts.timeoutMs } : {}),
       });
       return {

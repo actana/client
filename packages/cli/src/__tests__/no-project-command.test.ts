@@ -107,12 +107,6 @@ describe("session ls sends no project frame", () => {
           throw new Error("logs");
         },
         send: async () => false,
-        wait: async () => {
-          throw new Error("wait");
-        },
-        sendAndWait: async () => {
-          throw new Error("sendAndWait");
-        },
         kill: async () => ({ ptyId: "p", killed: true }),
         close: () => undefined,
       }),

@@ -16,6 +16,7 @@
       "@actana/sdk/pairing/stores/json-file": ["../sdk/dist/pairing/stores/json-file.d.ts"],
       "@actana/sdk/pairing/stores/postgres": ["../sdk/dist/pairing/stores/postgres.d.ts"],
       "@actana/sdk/core": ["../sdk/dist/core.d.ts"],
+      "@actana/sdk/shared": ["../sdk/dist/shared.d.ts"],
       "@actana/sdk/search": ["../sdk/dist/search.d.ts"]
     }
   },

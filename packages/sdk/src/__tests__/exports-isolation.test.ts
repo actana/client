@@ -50,6 +50,7 @@ describe("SDK export isolation", () => {
         "./pairing/stores/json-file",
         "./pairing/stores/postgres",
         "./search",
+        "./shared",
         "./shared-key",
       ].sort(),
     );
@@ -106,6 +107,10 @@ describe("SDK export isolation", () => {
     expect(depNames(probeExport("./shared-key"))).toEqual([]);
   });
 
+  it("importing ./shared loads none of ws, undici, zod or pg", () => {
+    expect(depNames(probeExport("./shared"))).toEqual([]);
+  });
+
   it("importing ./search does not load ws", () => {
     const loaded = depNames(probeExport("./search"));
     expect(loaded).not.toContain("ws");
@@ -119,6 +124,7 @@ describe("SDK export isolation", () => {
       "./core",
       "./core/link-frames",
       "./search",
+      "./shared",
     ];
     for (const subpath of publicExports) {
       expect(depNames(probeExport(subpath))).not.toContain("pg");

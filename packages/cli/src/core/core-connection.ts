@@ -53,7 +53,7 @@ export type CoreLinkClient = {
   request(frame: CoreLinkRequestFrame, timeoutMs?: number): Promise<CoreLinkResponseFrame>;
   agentsAvailabilityList(): Promise<CoreLinkHarnessAvailabilityMap>;
   onEvent(cb: (msg: { event: CoreLinkEvent }) => void): () => void;
-  onEventsReplayed(cb: (msg: { lastEventId: number }) => void): () => void;
+  onEventsReplayed(cb: (msg: { lastEventId: number; tipEventId?: number }) => void): () => void;
   onDisconnected(cb: (msg: { error?: string }) => void): () => void;
   onReady(cb: (info: CoreConnectionInfo) => void): () => void;
   subscribeEvents(lastEventId?: number): boolean;

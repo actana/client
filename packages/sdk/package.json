@@ -32,7 +32,8 @@
     "./core": "./src/core.ts",
     "./core/link-frames": "./src/core/browser.ts",
     "./search": "./src/search.ts",
-    "./shared-key": "./src/shared-key.ts"
+    "./shared-key": "./src/shared-key.ts",
+    "./shared": "./src/shared.ts"
   },
   "publishConfig": {
     "access": "public",
@@ -69,6 +70,10 @@
       "./shared-key": {
         "types": "./dist/shared-key.d.ts",
         "default": "./dist/shared-key.js"
+      },
+      "./shared": {
+        "types": "./dist/shared.d.ts",
+        "default": "./dist/shared.js"
       }
     }
   },
