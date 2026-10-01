@@ -1,5 +1,12 @@
 # @actana/cli
 
+## 0.6.0-next.3
+
+### Patch Changes
+
+- Updated dependencies [e77de32]
+  - @actana/sdk@0.6.0-next.3
+
 ## 0.6.0-next.2
 
 ### Minor Changes

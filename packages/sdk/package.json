@@ -1,6 +1,6 @@
 {
   "name": "@actana/sdk",
-  "version": "0.6.0-next.2",
+  "version": "0.6.0-next.3",
   "description": "Actana SDK — core-link client, pairing, and product entry points.",
   "license": "MIT",
   "type": "module",
