@@ -50,6 +50,7 @@ describe("SDK export isolation", () => {
         "./pairing/stores/json-file",
         "./pairing/stores/postgres",
         "./search",
+        "./shared",
         "./shared-key",
       ].sort(),
     );
