@@ -77,6 +77,8 @@ describe("CoreClient", () => {
       // no HTTP surface for one to point at. Null rather than absent: the field
       // is always reported, and "this Core has no file routes" is an answer.
       files: null,
+      // Likewise: this rig's Core announces no `shared` capability (client#4).
+      shared: null,
       coreId: "core_abc",
       bearerExpiresAt: expect.any(Number),
     });
@@ -196,9 +198,6 @@ describe("CoreClient", () => {
     // No `code` on this frame, and none invented: a reader takes the code when
     // it is there and falls back to the message when it is not.
     expect((err as CoreLinkRequestError).code).toBeUndefined();
-    await expect(c.projectsMutate({ op: "rename", projectId: "p1", name: "n" })).rejects.toThrow(
-      "Folder not found",
-    );
   });
 
   it("carries a coded error frame's code onto the rejection", () => {

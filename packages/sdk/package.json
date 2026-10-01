@@ -1,15 +1,10 @@
 {
   "name": "@actana/sdk",
-  "version": "0.6.0-next.0",
+  "version": "0.5.0",
   "description": "Actana SDK — core-link client, pairing, and product entry points.",
   "license": "MIT",
   "type": "module",
-  "keywords": [
-    "actana",
-    "core-link",
-    "sdk",
-    "pairing"
-  ],
+  "keywords": ["actana", "core-link", "sdk", "pairing"],
   "homepage": "https://github.com/actana/client/tree/main/packages/sdk#readme",
   "bugs": "https://github.com/actana/client/issues",
   "repository": {
@@ -20,9 +15,7 @@
   "engines": {
     "node": ">=24.0.0 <25"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "sideEffects": false,
   "exports": {
     "./pairing": "./src/pairing.ts",
@@ -31,7 +24,8 @@
     "./pairing/stores/postgres": "./src/pairing/stores/postgres.ts",
     "./core": "./src/core.ts",
     "./core/link-frames": "./src/core/browser.ts",
-    "./search": "./src/search.ts"
+    "./search": "./src/search.ts",
+    "./shared-key": "./src/shared-key.ts"
   },
   "publishConfig": {
     "access": "public",
@@ -64,6 +58,10 @@
       "./search": {
         "types": "./dist/search.d.ts",
         "default": "./dist/search.js"
+      },
+      "./shared-key": {
+        "types": "./dist/shared-key.d.ts",
+        "default": "./dist/shared-key.js"
       }
     }
   },

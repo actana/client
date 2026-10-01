@@ -46,8 +46,6 @@ function row(overrides: Partial<SessionRow> = {}): SessionRow {
     title: "fix the flaky test",
     harness: "claude-code",
     status: "running",
-    projectId: "proj_1",
-    project: "web",
     ptyId: "pty_1",
     live: true,
     writable: null,
@@ -61,7 +59,7 @@ describe("actana session — the command tree", () => {
   it("prints its help, and a bare `session` is a usage error", async () => {
     const help = await cli().run(["session", "--help"]);
     expect(help.code).toBe(EXIT_OK);
-    expect(help.out.join("\n")).toContain("actana session start <project> [prompt]");
+    expect(help.out.join("\n")).toContain("actana session start [prompt]");
 
     const bare = await cli().run(["session"]);
     expect(bare.code).toBe(EXIT_USAGE);
@@ -143,27 +141,21 @@ describe("actana session ls", () => {
     expect(JSON.parse(json.out.join("\n"))).toEqual([]);
   });
 
-  it("passes a project filter through as typed", async () => {
-    await withRegisteredCore();
-    let asked: string | null | undefined;
+  it("refuses a leftover project argument on ls", async () => {
+    registerCore(cli().paths, "prod");
     const run = await cli().run(["session", "ls", "web"], {
-      sessions: fakeSessionGateway({
-        list: async (project) => {
-          asked = project;
-          return [];
-        },
-      }),
+      sessions: fakeSessionGateway({ list: async () => [] }),
     });
-    expect(run.code).toBe(EXIT_OK);
-    expect(asked).toBe("web");
+    expect(run.code).toBe(EXIT_USAGE);
+    expect(run.err.join("\n")).toMatch(/unexpected argument/i);
+    expect(run.out.join("\n")).toBe("");
   });
-});
 
-describe("actana session start", () => {
+
   it("exits without waiting, printing the id and nothing else on stdout", async () => {
     await withRegisteredCore();
     let waited = false;
-    const run = await cli().run(["session", "start", "web", "fix", "the", "tests"], {
+    const run = await cli().run(["session", "start", "fix", "the", "tests"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({
@@ -180,7 +172,7 @@ describe("actana session start", () => {
     // `SESSION=$(actana session start …)` is the shape of every script that will
     // use this, so stdout is the id and the progress line went to stderr.
     expect(run.out).toEqual(["session_1"]);
-    expect(run.err.join("\n")).toContain("Started claude-code in web");
+    expect(run.err.join("\n")).toContain("Started claude-code — session session_1");
   });
 
   // ─── The turn-start asymmetry (issue 177 finding 4) ────────────────────
@@ -195,7 +187,7 @@ describe("actana session start", () => {
 
   it("says plainly when nothing will report the start of a turn", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go", "--harness", "cursor-cli"], {
+    const run = await cli().run(["session", "start", "go", "--harness", "cursor-cli"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({ harness: "cursor-cli", reportsTurnStart: false }),
@@ -216,7 +208,7 @@ describe("actana session start", () => {
 
   it("says nothing about turn starts for a harness that reports them", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go"], {
+    const run = await cli().run(["session", "start", "go"], {
       sessions: fakeSessionGateway({
         start: async () => fakeStartedSession({ reportsTurnStart: true }),
       }),
@@ -228,7 +220,7 @@ describe("actana session start", () => {
     // A script deciding whether a quiet status means "still working" or "never
     // started" cannot parse a sentence off stderr.
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go", "--json"], {
+    const run = await cli().run(["session", "start", "go", "--json"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({ harness: "cursor-cli", reportsTurnStart: false }),
@@ -240,7 +232,7 @@ describe("actana session start", () => {
   it("hands the prompt over as typed, and never a carriage return with it", async () => {
     await withRegisteredCore();
     let seen: Record<string, unknown> | null = null;
-    await cli().run(["session", "start", "web", "fix the tests"], {
+    await cli().run(["session", "start", "fix the tests"], {
       sessions: fakeSessionGateway({
         start: async (request) => {
           seen = request as unknown as Record<string, unknown>;
@@ -256,7 +248,7 @@ describe("actana session start", () => {
   it("reads a prompt from stdin when it is `-`", async () => {
     await withRegisteredCore();
     let seen = "";
-    await cli().run(["session", "start", "web", "-"], {
+    await cli().run(["session", "start", "-"], {
       stdin: "a prompt too long for a command line\n",
       sessions: fakeSessionGateway({
         start: async (request) => {
@@ -281,7 +273,7 @@ describe("actana session start", () => {
       list: async () => [row()],
     });
     for (const argv of [
-      ["session", "start", "web", "go", "--json", "--verbose"],
+      ["session", "start", "go", "--json", "--verbose"],
       ["session", "resume", "session_1", "--json", "--verbose"],
       ["session", "logs", "session_1", "--json", "--verbose"],
       ["session", "send", "session_1", "hi", "--json", "--verbose"],
@@ -298,13 +290,13 @@ describe("actana session start", () => {
       expect(stdout, where).not.toMatch(/taskId/i);
       expect(run.err.join("\n"), where).not.toMatch(/taskId/i);
     }
-    const start = await cli().run(["session", "start", "web", "go", "--json"], { sessions: gateway });
+    const start = await cli().run(["session", "start", "go", "--json"], { sessions: gateway });
     expect(Object.keys(JSON.parse(start.out.join("\n")))).not.toContain("taskId");
   });
 
   it("emits one object under --json, with no prose beside it", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go", "--json", "--verbose"], {
+    const run = await cli().run(["session", "start", "go", "--json", "--verbose"], {
       sessions: fakeSessionGateway({ start: async () => fakeStartedSession() }),
     });
     expect(run.code).toBe(EXIT_OK);
@@ -316,7 +308,7 @@ describe("actana session start", () => {
 
   it("blocks with --wait and reports the state the Core settled on", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go", "--wait", "--json"], {
+    const run = await cli().run(["session", "start", "go", "--wait", "--json"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({
@@ -335,7 +327,7 @@ describe("actana session start", () => {
 
   it("exits non-zero when the harness died, and zero when it stopped to ask", async () => {
     await withRegisteredCore();
-    const died = await cli().run(["session", "start", "web", "go", "--wait"], {
+    const died = await cli().run(["session", "start", "go", "--wait"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({ wait: async () => ({ status: "terminated", exited: true, exitCode: 137 }) }),
@@ -345,7 +337,7 @@ describe("actana session start", () => {
 
     // A question is not a failure — a script that treated it as one could not
     // then answer it with `session send`.
-    const asked = await cli().run(["session", "start", "web", "go", "--wait"], {
+    const asked = await cli().run(["session", "start", "go", "--wait"], {
       sessions: fakeSessionGateway({
         start: async () => fakeStartedSession({ wait: async () => ({ status: "needs-input", exited: false }) }),
       }),
@@ -357,7 +349,7 @@ describe("actana session start", () => {
   it("passes --wait-timeout through as the SDK's deadline, and refuses it alone", async () => {
     await withRegisteredCore();
     let timeoutMs: number | undefined;
-    const run = await cli().run(["session", "start", "web", "go", "--wait", "--wait-timeout", "90"], {
+    const run = await cli().run(["session", "start", "go", "--wait", "--wait-timeout", "90"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({
@@ -371,7 +363,7 @@ describe("actana session start", () => {
     expect(run.code).toBe(EXIT_OK);
     expect(timeoutMs).toBe(90_000);
 
-    const alone = await cli().run(["session", "start", "web", "go", "--wait-timeout", "90"], {
+    const alone = await cli().run(["session", "start", "go", "--wait-timeout", "90"], {
       sessions: fakeSessionGateway(),
     });
     expect(alone.code).toBe(EXIT_USAGE);
@@ -380,7 +372,7 @@ describe("actana session start", () => {
 
   it("reports a wait that ran out as this side giving up, not as a status", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "go", "--wait", "--wait-timeout", "1", "--json"], {
+    const run = await cli().run(["session", "start", "go", "--wait", "--wait-timeout", "1", "--json"], {
       sessions: fakeSessionGateway({
         start: async () =>
           fakeStartedSession({
@@ -398,21 +390,27 @@ describe("actana session start", () => {
 
   it("checks the harness name before dialling", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "start", "web", "--harness", "emacs"], {
+    const run = await cli().run(["session", "start", "--harness", "emacs"], {
       sessions: fakeSessionGateway(),
     });
     expect(run.code).toBe(EXIT_USAGE);
     expect(run.err.join("\n")).toContain("claude-code");
   });
 
-  it("needs a project", async () => {
-    await withRegisteredCore();
-    const run = await cli().run(["session", "start"], { sessions: fakeSessionGateway() });
+  it("refuses --cwd on start", async () => {
+    registerCore(cli().paths, "prod");
+    const run = await cli().run(["session", "start", "--cwd", "/tmp", "hi"], {
+      sessions: fakeSessionGateway({
+        start: async () => {
+          throw new Error("start must not run");
+        },
+      }),
+    });
     expect(run.code).toBe(EXIT_USAGE);
+    expect(run.err.join("\n")).toMatch(/--cwd/i);
   });
-});
 
-describe("actana session resume", () => {
+
   it("starts a Session on an existing conversation and reports it like `start`", async () => {
     await withRegisteredCore();
     let asked = "";
@@ -581,7 +579,7 @@ describe("actana session wait, and send --wait (#289)", () => {
     await withRegisteredCore();
     const outcome = { status: "finished", exited: true, exitCode: 0 };
 
-    const started = await cli().run(["session", "start", "web", "go", "--wait", "--json"], {
+    const started = await cli().run(["session", "start", "go", "--wait", "--json"], {
       sessions: fakeSessionGateway({
         start: async () => fakeStartedSession({ wait: async () => outcome }),
       }),
@@ -792,7 +790,7 @@ describe("--json means only JSON on stdout", () => {
 
     for (const argv of [
       ["session", "ls", "--json", "--verbose"],
-      ["session", "start", "web", "go", "--json", "--verbose"],
+      ["session", "start", "go", "--json", "--verbose"],
       ["session", "resume", "session_1", "--json", "--verbose"],
       ["session", "logs", "session_1", "--json", "--verbose"],
       ["session", "send", "session_1", "hi", "--json", "--verbose"],

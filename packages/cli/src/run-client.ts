@@ -3,7 +3,6 @@
 import { parseArgs } from "./kit/cli-args.ts";
 import { registryPaths } from "./registry/credentials.ts";
 import { runCoreCommand } from "./core/core-command.ts";
-import { runProjectCommand } from "./core/project-command.ts";
 import { runHarnessCommand } from "./core/harness-command.ts";
 import { runEventsCommand } from "./core/events-command.ts";
 import { runSessionCommand } from "./core/session-command.ts";
@@ -19,7 +18,7 @@ export const CLI_VERSION: string = manifest.version;
 /** Returned by a built-in's machine layer when the general CLI should take over. */
 export const NOT_HANDLED = Symbol.for("actana.cli.NOT_HANDLED");
 
-export const CLIENT_NOUNS = ["core", "project", "harness", "events", "session"] as const;
+export const CLIENT_NOUNS = ["core", "harness", "events", "session"] as const;
 
 export type RunClientOptions = {
   /** Appended after the general help — machine verbs from a product built-in. */
@@ -37,7 +36,6 @@ Usage
 
 Cores
   core       pair, ls, use, rm, status, shell, exec
-  project    ls, add, browse, files, cp
   harness    ls, install, skills
   events     tail
   session    start, ls, logs, resume, attach, kill, send
@@ -129,8 +127,6 @@ export async function runClient(
   switch (head) {
     case "core":
       return runCoreCommand(clientDeps, args, paths);
-    case "project":
-      return runProjectCommand(clientDeps, args, paths);
     case "harness":
       return runHarnessCommand(clientDeps, args, paths);
     case "events":

@@ -12,7 +12,7 @@
 //     const client = CoreClient.fromRegistrationBlob(blob);
 //     await client.connect();
 //     const session = await CoreSession.start(client, {
-//       projectId, cwd, harness: "claude-code", prompt: "…",
+//       harness: "claude-code", prompt: "…",
 //     });
 //     await session.waitForIdle();
 //     console.log(session.screen());
@@ -33,14 +33,13 @@
 //      separate keystroke (ADR 0026, #191). There is no delay, no ready-signal
 //      and no retry here to disagree with it, which is what makes a Panel, the
 //      CLI and this behave identically on a machine none of them is on.
-//   2. **It does not pre-empt the Core's spawn policy.** A Session is spawned
-//      against a registered Project: the Core checks that the working directory
-//      resolves inside a known Project root, that the command's first token is
-//      that harness's canonical binary, and that every flag is allow-listed.
-//      Those checks read a database and a filesystem on another machine, so a
-//      copy of them here would be a guess — and a guess that says no to a spawn
-//      the Core would have accepted is worse than the round trip. {@link start}
-//      surfaces the rejection.
+//   2. **It does not pre-empt the Core's spawn policy.** A Session always starts
+//      in the Core's workspace (`~`, ADR 0041 D2): the Core checks that the
+//      command's first token is that harness's canonical binary and that every
+//      flag is allow-listed. Those checks read a filesystem on another machine,
+//      so a copy of them here would be a guess — and a guess that says no to a
+//      spawn the Core would have accepted is worse than the round trip.
+//      {@link start} surfaces the rejection.
 //   3. **It does not decide what "done" means from the bytes.** Idleness is the
 //      Core's report — the harness's own lifecycle hooks moving the Session's
 //      status — read off the event log. Watching the stream go quiet is the
@@ -215,25 +214,14 @@ export const CORE_LINK_LOST_GRACE_MS = 30_000;
 
 export type CoreSessionStartOptions = {
   /**
-   * The Project to start this Session in. Either this or {@link sessionId}: with a
-   * `projectId` a Session row is created on the Core first, because a Session's
-   * status lives on that row and a spawn naming a row that does not exist
-   * reports nothing back.
+   * An existing Session row to start against. When omitted, a Session row is
+   * created on the Core first, because a Session's status lives on that row and
+   * a spawn naming a row that does not exist reports nothing back. There is no
+   * Project: every Session starts in the Core's workspace (ADR 0041 D1–D2).
    */
-  projectId?: string;
-  /** An existing Session row to start against. Either this or {@link projectId}. */
   sessionId?: string;
-  /** Title for the row created from {@link projectId}. Ignored with a `sessionId`. */
+  /** Title for the row created when {@link sessionId} is omitted. */
   title?: string;
-  /**
-   * The working directory on the **Core's** machine.
-   *
-   * A machine path, validatable only there: the Core resolves it through
-   * `realpath` and refuses it unless it lands inside a registered Project root.
-   * Nothing here checks it — this process may not even be on that machine — so a
-   * bad path comes back as a rejected {@link start}, which is the design.
-   */
-  cwd: string;
   /** Which harness to run. */
   harness: CoreLinkPtySpawnHarness;
   /**
@@ -780,11 +768,12 @@ export class CoreSession {
   /**
    * Start a Session and return once the Core has one running.
    *
-   * What happens, in order: a Session row is created when the caller named a
-   * Project rather than a `sessionId`; the client is subscribed to the Core's event log
-   * if nothing has done that yet; the PTY's byte stream is wired up *before* the
+   * What happens, in order: a Session row is created when the caller did not
+   * name a `sessionId`; the client is subscribed to the Core's event log if
+   * nothing has done that yet; the PTY's byte stream is wired up *before* the
    * spawn goes out; and the spawn carries the prompt as `initialInput` for the
-   * Core to deliver.
+   * Core to deliver. Every Session starts in the Core's workspace (`~`); there
+   * is no Project and no cwd on the spawn (ADR 0041 D1–D2).
    *
    * The stream is wired first on purpose. A harness starts printing its banner
    * immediately, and on a Core that fans output out by subscription the
@@ -794,15 +783,14 @@ export class CoreSession {
    * is the difference between a transcript that starts at the beginning and one
    * that starts wherever the round trip happened to end.
    *
-   * Rejects with the Core's own message when the Core refuses: a working
-   * directory outside every registered Project root, a command whose binary is
-   * not that harness's, a flag that is not allow-listed, a harness that is not
-   * installed on that machine.
+   * Rejects with the Core's own message when the Core refuses: a command whose
+   * binary is not that harness's, a flag that is not allow-listed, a harness
+   * that is not installed on that machine.
    */
   static async start(client: CoreClient, opts: CoreSessionStartOptions): Promise<CoreSession> {
-    if (!opts.sessionId && !opts.projectId) {
+    if (!opts.harness) {
       throw new CoreSessionStartError(
-        "CoreSession.start needs a sessionId or a projectId to start a Session against",
+        "CoreSession.start needs a harness to start a Session with",
       );
     }
     const cols = opts.cols ?? DEFAULT_COLS;
@@ -872,7 +860,6 @@ export class CoreSession {
     try {
       spawned = await client.spawn({
         sessionId,
-        cwd: opts.cwd,
         command,
         agent: opts.harness,
         cols,
@@ -891,7 +878,7 @@ export class CoreSession {
       stopDown();
       stopUp();
       throw new CoreSessionStartError(
-        `the Core refused to start a ${opts.harness} Session in ${opts.cwd}: ${
+        `the Core refused to start a ${opts.harness} Session: ${
           err instanceof Error ? err.message : String(err)
         }`,
         { cause: err },
@@ -1778,37 +1765,33 @@ export function harnessLaunchCommand(
 }
 
 /**
- * Create the Session row a CoreSession hangs off, in the Project the caller named.
+ * Create the Session row a CoreSession hangs off.
  *
  * A Session's status is a column on this row: the Core's hook pipeline patches
  * it, the patch appends the event, and the event is what {@link
  * CoreSession.waitForIdle} is waiting for. A spawn naming a row that does not
  * exist runs a harness that reports to nowhere — so the row comes first, and a
- * Core that will not create it (an unknown Project) fails the start here rather
- * than producing a Session nothing can observe.
+ * Core that will not create it fails the start here rather than producing a
+ * Session nothing can observe. There is no Project (ADR 0041 D1).
  */
 async function createSessionRow(client: CoreClient, opts: CoreSessionStartOptions): Promise<string> {
-  const projectId = opts.projectId!;
   let created;
   try {
     created = await client.sessionsMutate({
       op: "create",
-      projectId,
       title: opts.title ?? "SDK session",
       agent: opts.harness,
     });
   } catch (err) {
     throw new CoreSessionStartError(
-      `the Core refused to create a Session in project ${projectId}: ${
+      `the Core refused to create a Session: ${
         err instanceof Error ? err.message : String(err)
       }`,
       { cause: err },
     );
   }
   if (!created) {
-    throw new CoreSessionStartError(
-      `the Core has no project ${projectId} to start a Session in`,
-    );
+    throw new CoreSessionStartError("the Core refused to create a Session row");
   }
   return created.sessionId;
 }

@@ -25,19 +25,19 @@ import {
   coreLinkProtocolCompatible,
   readFilesCapability,
   readMultiConnectionCapability,
+  readSharedCapability,
   type CoreLinkErrorCode,
   type CoreLinkEvent,
   type CoreLinkFilesCapability,
   type CoreLinkHarnessAvailabilityMap,
   type CoreLinkLaunchProcessKillResult,
   type CoreLinkMultiConnectionCapability,
-  type CoreLinkProjectMutation,
-  type CoreLinkProjectSnapshot,
   type CoreLinkPtyReplay,
   type CoreLinkPtySpawnOptions,
   type CoreLinkRequestFrame,
   type CoreLinkResponseFrame,
   type CoreLinkSessionSnapshot,
+  type CoreLinkSharedCapability,
   type CoreLinkSessionTakenFrom,
   type CoreLinkSessionMutation,
   type CoreLinkSessionRow,
@@ -155,6 +155,11 @@ export type CoreConnectionInfo = {
    * registration blob that produced this connection's `wss://` url.
    */
   files: CoreLinkFilesCapability | null;
+  /**
+   * The `shared` capability, or null on a Core that cannot mount a Shared folder.
+   * Null means withhold `sharedAttach`, `sharedCredentials` and `sharedDetach`.
+   */
+  shared: CoreLinkSharedCapability | null;
   /** The `coreId` off `authOk`; null when no bearer was configured. */
   coreId: string | null;
   /** The bearer's expiry off `authOk`; null when no bearer was configured. */
@@ -348,6 +353,8 @@ export class CoreClient {
    * `true` here would send a caller at a route that is no longer there.
    */
   private files: CoreLinkFilesCapability | null = null;
+  /** This Core's `shared` capability on the *current* connection; reset like `files`. */
+  private shared: CoreLinkSharedCapability | null = null;
   private authOkFrame: CoreLinkAuthOkFrame | null = null;
 
   private readonly readyListeners = new Set<(info: CoreConnectionInfo) => void>();
@@ -459,6 +466,7 @@ export class CoreClient {
     this.ready = null;
     this.multiConnection = null;
     this.files = null;
+    this.shared = null;
     this.authOkFrame = null;
     this.established = false;
     this.transport = new CoreLinkTransport({
@@ -471,6 +479,7 @@ export class CoreClient {
           this.ready = frame;
           this.multiConnection = readMultiConnectionCapability(frame.multiConnection);
           this.files = readFilesCapability(frame.files);
+          this.shared = readSharedCapability(frame.shared);
           const info = this.connectionInfo();
           for (const cb of this.readyListeners) cb(info);
           this.maybeEstablish();
@@ -508,6 +517,7 @@ export class CoreClient {
           this.ready = null;
           this.multiConnection = null;
           this.files = null;
+          this.shared = null;
           this.authOkFrame = null;
           // Cleared here and not only on the next dial: between a socket dying
           // and a durable client's backoff opening the next one, this client is
@@ -612,6 +622,7 @@ export class CoreClient {
       compatible: coreLinkProtocolCompatible(this.ready?.version ?? null),
       multiConnection: this.multiConnection,
       files: this.files,
+      shared: this.shared,
       coreId: this.authOkFrame?.coreId ?? null,
       bearerExpiresAt: this.authOkFrame?.exp ?? null,
     };
@@ -703,6 +714,14 @@ export class CoreClient {
    */
   filesCapability(): CoreLinkFilesCapability | null {
     return this.files;
+  }
+
+  /**
+   * This connection's `shared` capability, or null. Non-null is the gate for sending
+   * the Shared-folder frames; null means the Core does not announce it.
+   */
+  sharedCapability(): CoreLinkSharedCapability | null {
+    return this.shared;
   }
 
   /**
@@ -1344,49 +1363,26 @@ export class CoreClient {
   }
 
   /**
-   * List every project on this Core as a live snapshot. The Core is the source of
-   * truth; a client holds none. The returned `path` is a machine path on the
-   * Core — only the Core can validate it.
-   */
-  projectsList(): Promise<CoreLinkProjectSnapshot[]> {
-    return this.rpc({ type: "projectsList", reqId: "" }) as Promise<CoreLinkProjectSnapshot[]>;
-  }
-
-  /**
-   * List every active (non-archived) session on this Core, optionally filtered to
-   * one project.
+   * List every active (non-archived) session on this Core.
    *
    * `archivedCount` is how many archived rows the same scope holds — a scalar,
    * never the rows (ADR 0019). Use {@link archivedSessionRowsList} for those.
    */
-  sessionRowsList(projectId?: string): Promise<{ sessions: CoreLinkSessionRow[]; archivedCount: number }> {
-    return this.rpc({ type: "sessionRowsList", reqId: "", projectId }) as Promise<{
+  sessionRowsList(): Promise<{ sessions: CoreLinkSessionRow[]; archivedCount: number }> {
+    return this.rpc({ type: "sessionRowsList", reqId: "" }) as Promise<{
       sessions: CoreLinkSessionRow[];
       archivedCount: number;
     }>;
   }
 
   /**
-   * List every archived session on this Core, optionally filtered to one project
-   * (ADR 0019) — a separate frame from {@link sessionRowsList}, so an active answer
-   * stays free of archived rows by construction rather than by what a caller
-   * remembers to pass.
+   * List every archived session on this Core (ADR 0019) — a separate frame from
+   * {@link sessionRowsList}, so an active answer stays free of archived rows by
+   * construction rather than by what a caller remembers to pass.
    */
-  archivedSessionRowsList(projectId?: string): Promise<CoreLinkSessionRow[]> {
-    return this.rpc({ type: "archivedSessionRowsList", reqId: "", projectId }) as Promise<
+  archivedSessionRowsList(): Promise<CoreLinkSessionRow[]> {
+    return this.rpc({ type: "archivedSessionRowsList", reqId: "" }) as Promise<
       CoreLinkSessionRow[]
-    >;
-  }
-
-  /**
-   * Create / rename / archive a project on this Core. The Core validates the
-   * machine path server-side; an invalid path comes back as an `error` frame that
-   * rejects this promise. Returns `null` when a `rename`/`archive` targets a
-   * missing row.
-   */
-  projectsMutate(mutation: CoreLinkProjectMutation): Promise<CoreLinkProjectSnapshot | null> {
-    return this.rpc({ type: "projectsMutate", reqId: "", mutation }) as Promise<
-      CoreLinkProjectSnapshot | null
     >;
   }
 
@@ -1398,12 +1394,12 @@ export class CoreClient {
   }
 
   /**
-   * List every active session on this Core (optionally filtered to one project).
-   * A session's `ptyId` is set when the Core has a live PTY for that session — which
-   * is how a client knows what it can reattach to.
+   * List every active session on this Core. A session's `ptyId` is set when the
+   * Core has a live PTY for that session — which is how a client knows what it
+   * can reattach to.
    */
-  sessionsList(projectId?: string): Promise<CoreLinkSessionSnapshot[]> {
-    return this.rpc({ type: "sessionsList", reqId: "", projectId }) as Promise<
+  sessionsList(): Promise<CoreLinkSessionSnapshot[]> {
+    return this.rpc({ type: "sessionsList", reqId: "" }) as Promise<
       CoreLinkSessionSnapshot[]
     >;
   }
@@ -1512,12 +1508,8 @@ export function unwrapResponse(msg: CoreLinkResponseFrame): unknown {
       return { sessions: msg.sessions, archivedCount: msg.archivedCount };
     case "archivedSessionRowsListResult":
       return msg.sessions;
-    case "projectsListResult":
-      return msg.projects;
     case "sessionsMutateResult":
       return msg.session;
-    case "projectsMutateResult":
-      return msg.project;
     case "sessionsListResult":
       return msg.sessions;
     case "agentsAvailabilityListResult":

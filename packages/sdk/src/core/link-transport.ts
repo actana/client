@@ -353,6 +353,8 @@ export class CoreLinkTransport {
           // "present but junk" distinguishable at the layer that can tell the
           // difference.
           ...(msg.files !== undefined ? { files: msg.files as CoreLinkReadyFrame["files"] } : {}),
+          // Same contract as `files`: carried, and `readSharedCapability` upstairs decides.
+          ...(msg.shared !== undefined ? { shared: msg.shared as CoreLinkReadyFrame["shared"] } : {}),
         };
         this.guard(() => this.handlers.onReady?.(this.ready!));
         return;

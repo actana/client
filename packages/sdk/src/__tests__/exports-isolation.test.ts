@@ -50,6 +50,7 @@ describe("SDK export isolation", () => {
         "./pairing/stores/json-file",
         "./pairing/stores/postgres",
         "./search",
+        "./shared-key",
       ].sort(),
     );
     expect(Object.hasOwn(exportsMap, ".")).toBe(false);
@@ -99,6 +100,10 @@ describe("SDK export isolation", () => {
 
   it("importing ./core/link-frames loads none of ws, undici, zod or pg", () => {
     expect(depNames(probeExport("./core/link-frames"))).toEqual([]);
+  });
+
+  it("importing ./shared-key loads none of ws, undici, zod or pg", () => {
+    expect(depNames(probeExport("./shared-key"))).toEqual([]);
   });
 
   it("importing ./search does not load ws", () => {
