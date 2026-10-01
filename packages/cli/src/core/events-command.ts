@@ -243,7 +243,7 @@ async function eventsTail(
  * where the whole payload lives, uncut.
  */
 function formatEventLine(event: CoreLinkEvent): string {
-  const subject = event.taskId ? `task=${event.taskId}` : event.ptyId ? `pty=${event.ptyId}` : "";
+  const subject = event.sessionId ? `session=${event.sessionId}` : event.ptyId ? `pty=${event.ptyId}` : "";
   const head = `#${event.eventId}  ${new Date(event.ts).toISOString()}  ${event.kind}`;
   const payload = event.payload.replace(/\s+/g, " ").trim();
   const tail = [subject, clip(payload, 100)].filter(Boolean).join("  ");
@@ -272,7 +272,7 @@ function formatEventJson(event: CoreLinkEvent): string {
     ts: event.ts,
     kind: event.kind,
     ptyId: event.ptyId,
-    taskId: event.taskId,
+    sessionId: event.sessionId,
     payload: event.payload,
   });
 }

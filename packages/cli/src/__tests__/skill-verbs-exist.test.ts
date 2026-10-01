@@ -73,4 +73,14 @@ describe("the skill only teaches verbs this binary has (#288)", () => {
     expect(text).not.toContain("the operator has not\n  paired this machine with a Core");
     expect(text).toContain("a machine running a Core registers it automatically");
   });
+
+  it("never teaches taskId, because session --json prints sessionId only", () => {
+    for (const skill of ORCHESTRATION_SKILL_NAMES) {
+      for (const [file, text] of Object.entries(ORCHESTRATION_SKILL_FILES[skill] ?? {})) {
+        expect(text, `${skill}/${file}`).not.toMatch(/taskId/);
+      }
+    }
+    const sessions = ORCHESTRATION_SKILL_FILES["actana-sessions"]?.["SKILL.md"] ?? "";
+    expect(sessions).toContain("`sessionId`");
+  });
 });

@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 const sdkSrc = path.resolve(import.meta.dirname, "src");
-// Pinned Control sources for test-only @actana/core and @actana/shared aliases (d7eeb65).
-const controlPinSrc = path.resolve(import.meta.dirname, "../../.vendor/control-d7eeb65/src");
+// Pinned Control sources for test-only @actana/core and @actana/shared aliases (aa03266, unmerged control draft PR 598).
+const controlPinSrc = path.resolve(import.meta.dirname, "../../.vendor/control-aa03266/src");
 
 export default defineConfig({
   test: {
