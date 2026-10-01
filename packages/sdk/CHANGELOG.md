@@ -1,5 +1,12 @@
 # @actana/sdk
 
+## 0.6.0-next.2
+
+### Minor Changes
+
+- 108286d: Add `@actana/sdk/shared` (Node-only): the `CoreShared` interface (list, get, put, mkdir, rm, move, upload of a folder tree, watch since a cursor, signedUrl) and its direct-S3 mode, `createS3CoreShared`, for a controller that holds the master key and works while the Core is offline. Paths are relative to the Core's prefix and never escape it. A move is copy then delete and reports what a partial failure leaves behind; `watch` polls a listing and returns changes by an opaque cursor; a signed URL never outlives the key. The through-the-Core mode is a later change.
+- 108286d: Add the through-the-Core mode of `@actana/sdk/shared`: `createThroughCoreShared` talks to the Core's Files API under `~/shared` (list, get, put, mkdir, delete with trailing slash for folders, move, upload) and watches `shared:changed` events by event-log cursor. Same CoreShared contract suite as the S3 mode; Node-only subpath, no new dependency.
+
 ## 0.6.0-next.1
 
 ### Minor Changes
