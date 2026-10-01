@@ -1,5 +1,20 @@
 # @actana/sdk
 
+## 0.6.0-next.2
+
+### Minor Changes
+
+- 108286d: Add `@actana/sdk/shared` (Node-only): the `CoreShared` interface (list, get, put, mkdir, rm, move, upload of a folder tree, watch since a cursor, signedUrl) and its direct-S3 mode, `createS3CoreShared`, for a controller that holds the master key and works while the Core is offline. Paths are relative to the Core's prefix and never escape it. A move is copy then delete and reports what a partial failure leaves behind; `watch` polls a listing and returns changes by an opaque cursor; a signed URL never outlives the key. The through-the-Core mode is a later change.
+- 108286d: Add the through-the-Core mode of `@actana/sdk/shared`: `createThroughCoreShared` talks to the Core's Files API under `~/shared` (list, get, put, mkdir, delete with trailing slash for folders, move, upload) and watches `shared:changed` events by event-log cursor. Same CoreShared contract suite as the S3 mode; Node-only subpath, no new dependency.
+
+## 0.6.0-next.1
+
+### Minor Changes
+
+- 134d113: Add the core-link Shared-folder frames `sharedAttach`, `sharedCredentials` and `sharedDetach`, the `sharedStatus` reply, the `ready.shared` capability, and redacting formatters for the credentials they carry. `CORE_LINK_PROTOCOL_VERSION` moves to 0.19.0.
+- 134d113: Remove Projects from the core-link protocol and the CLI (actana/client#10 part 3, ADR 0041 D1–D2). Drop `projectsList` / `projectsMutate` and every `project:*` event, drop `projectId` on session rows and spawn, drop `cwd` on harness spawn. `CORE_LINK_PROTOCOL_VERSION` stays at 0.19.0: that minor already covers the Shared-folder frames (client#4 / PR 33); no published SDK carries 0.19.0, so both wire changes share it. Delete the `actana project` command and every project argument; `session start` takes a Core, a harness and a prompt only. `session ls` never dials a project frame. File transfer left the CLI with Projects (no `project cp`); part 4 lands `actana files`. A bare `actana session start web "…"` now treats `web` as the start of the prompt. Hard cut below 1.0, so the bump is minor (not major). The Files HTTPS URL stays for part 4.
+- 134d113: Add `@actana/sdk/shared-key` (Node-only): the `SharedKeyIssuer` interface, a `createSharedKeyProvider` that refreshes a Core's key 15 minutes before it expires (never more than half its life), and the default SeaweedFS issuer. The controller holds the master signing key and issues each Core a 1-hour S3 key limited to `<prefix>/<core-id>/`; the result carries only the access key, secret, session token and expiry.
+
 ## 0.6.0-next.0
 
 ### Minor Changes
