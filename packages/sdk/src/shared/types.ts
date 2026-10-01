@@ -18,7 +18,12 @@ export interface SharedEntry {
   readonly kind: SharedEntryKind;
   /** Bytes. Absent for a folder. */
   readonly size?: number;
-  /** Absent for a folder that exists only because something is inside it. */
+  /**
+   * Always present for a file. For a folder it is optional in every mode: a mode may give a time
+   * for a folder (a Core's disk has one) or none (an object store has none for a folder that exists
+   * only because something is inside it). A caller must not rely on either, and a test may not
+   * compare a folder entry as a whole object, only by `kind` and `path`.
+   */
   readonly modifiedAt?: Date;
 }
 
@@ -36,6 +41,19 @@ export type SharedUploadEntry =
 /** An opaque position in the change feed. Treat it as a string to store and hand back. */
 export type SharedCursor = string;
 
+/**
+ * Folder rules, the same in every mode (a Core's disk, an object store):
+ *
+ * - A folder you made with `mkdir`, or that holds something, is listed by `list`.
+ * - `rm` of a folder and `move` of a folder remove the folder at the old path, with its contents.
+ * - Whether a folder stays once its last file is deleted or moved out is NOT defined: a disk keeps
+ *   it, flat S3 does not. Callers must `mkdir` (or not rely on) a folder they want to keep empty,
+ *   and no test asserts either way.
+ * - `watch` must report every change to a FILE. It MAY report folders (created, removed), and which
+ *   ones is the mode's business: an object store can tell a made-empty folder from a folder that
+ *   merely holds files, a disk cannot. A caller treats folder changes as hints and never depends
+ *   on one; the contract suite looks at files only.
+ */
 export interface SharedChange {
   readonly path: string;
   readonly kind: SharedEntryKind;
@@ -81,7 +99,10 @@ export interface CoreShared {
   upload(destination: SharedPath, entries: Iterable<SharedUploadEntry>): Promise<SharedPath[]>;
   /**
    * What changed since `since` (everything, when omitted) and the cursor to continue from.
-   * The cursor is opaque and only meaningful to the mode that issued it.
+   * Every file change is reported; folder changes are optional (see {@link SharedChange}).
+   * The cursor is opaque and only meaningful to the mode that issued it. A string that is empty or is
+   * not a cursor at all (for example `"garbage"`) is `invalid-cursor` in every mode; beyond that a mode
+   * decides what it accepts, so a cursor of one mode may be a valid cursor of another.
    */
   watch(since?: SharedCursor): Promise<SharedWatchResult>;
   /** A URL that downloads one file without credentials, valid for `expiresInSeconds` (default 300) or until the key behind it expires. */
