@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-// T-222 — build and pack @actana/sdk + @actana/cli 0.5.0 tarballs for local consumption.
+// T-222 — build and pack the @actana/sdk + @actana/cli tarballs for local consumption.
 //
-// Writes actana-sdk-0.5.0.tgz and actana-cli-0.5.0.tgz under .pack/ (gitignored).
-// Phase 3 (Search) can install with file: paths until npm publishes 0.5.0.
+// Writes actana-sdk-<version>.tgz and actana-cli-<version>.tgz under .pack/ (gitignored). Each
+// version is read from that package's package.json, so any version works, a prerelease such as
+// 0.6.0-next.0 included. (The file name still says 0.5.0 because the scripts were named for it.)
+// Phase 3 (Search) can install with file: paths until npm publishes the version.
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
@@ -40,8 +42,10 @@ run("cli build", ["--filter", "@actana/cli", "run", "build"]);
 run("sdk pack", ["--filter", "@actana/sdk", "pack", "--pack-destination", outDir]);
 run("cli pack", ["--filter", "@actana/cli", "pack", "--pack-destination", outDir]);
 
-const sdkTgz = join(outDir, "actana-sdk-0.5.0.tgz");
-const cliTgz = join(outDir, "actana-cli-0.5.0.tgz");
+const sdkManifest = JSON.parse(readFileSync(join(repoRoot, "packages/sdk/package.json"), "utf8"));
+const cliManifest = JSON.parse(readFileSync(join(repoRoot, "packages/cli/package.json"), "utf8"));
+const sdkTgz = join(outDir, `actana-sdk-${sdkManifest.version}.tgz`);
+const cliTgz = join(outDir, `actana-cli-${cliManifest.version}.tgz`);
 
 for (const file of [sdkTgz, cliTgz]) {
   if (!existsSync(file)) {
@@ -50,10 +54,13 @@ for (const file of [sdkTgz, cliTgz]) {
   }
 }
 
-const cliManifest = JSON.parse(readFileSync(join(repoRoot, "packages/cli/package.json"), "utf8"));
-if (cliManifest.version !== "0.5.0") {
-  console.error(`pack-0.5.0: expected CLI 0.5.0, got ${cliManifest.version}`);
-  process.exit(1);
+// A packed CLI must name a real version; the tarball existing above already ties it to package.json.
+const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+for (const manifest of [sdkManifest, cliManifest]) {
+  if (!SEMVER.test(manifest.version)) {
+    console.error(`pack-0.5.0: ${manifest.name} has no valid semver version: ${manifest.version}`);
+    process.exit(1);
+  }
 }
 
 process.stdout.write(

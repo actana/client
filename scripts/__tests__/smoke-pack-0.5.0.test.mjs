@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -78,6 +78,78 @@ describe("packed 0.5.0 smoke (T-222)", () => {
         expect(result.status).not.toBe(0);
         expect(result.stdout).not.toContain("smoke-pack-0.5.0: OK");
       });
+    });
+  });
+});
+
+describe("pack script tarball names follow the package versions", () => {
+  // A scratch repo holding a copy of the pack script, two stub package.json files at a
+  // prerelease version and a fake pnpm that writes the tarball `pnpm pack` would write, so the
+  // test is quick and does not depend on the real packages' version.
+  function inScratchRepo(sdkVersion, cliVersion, fn) {
+    const root = mkdtempSync(join(tmpdir(), "actana-pack-names-"));
+    try {
+      mkdirSync(join(root, "scripts"), { recursive: true });
+      copyFileSync(join(repoRoot, "scripts/pack-0.5.0.mjs"), join(root, "scripts/pack-0.5.0.mjs"));
+      for (const [pkg, version] of [["sdk", sdkVersion], ["cli", cliVersion]]) {
+        mkdirSync(join(root, `packages/${pkg}`), { recursive: true });
+        writeFileSync(join(root, `packages/${pkg}/package.json`), JSON.stringify({ name: `@actana/${pkg}`, version }));
+      }
+      const bin = join(root, "bin");
+      mkdirSync(bin);
+      writeFileSync(
+        join(bin, "pnpm"),
+        `#!${process.execPath}
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (args[0] === "--version") { console.log("9.9.9"); process.exit(0); }
+const pack = args.indexOf("pack");
+if (pack !== -1) {
+  const pkg = args[args.indexOf("--filter") + 1].replace("@actana/", "");
+  const { version } = JSON.parse(fs.readFileSync(${JSON.stringify(root)} + "/packages/" + pkg + "/package.json", "utf8"));
+  fs.writeFileSync(args[args.indexOf("--pack-destination") + 1] + "/actana-" + pkg + "-" + version + ".tgz", "");
+}
+`,
+      );
+      chmodSync(join(bin, "pnpm"), 0o755);
+      return fn(root, bin);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  function runPack(root, bin) {
+    return spawnSync(process.execPath, [join(root, "scripts/pack-0.5.0.mjs")], {
+      cwd: root,
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}${delimiter}${process.env.PATH ?? ""}` },
+    });
+  }
+
+  it("finds the tarballs of a prerelease version", () => {
+    inScratchRepo("0.6.0-next.0", "0.6.0-next.0", (root, bin) => {
+      const result = runPack(root, bin);
+      expect(result.stderr).not.toContain("expected tarball missing");
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("actana-sdk-0.6.0-next.0.tgz");
+      expect(result.stdout).toContain("actana-cli-0.6.0-next.0.tgz");
+    });
+  });
+
+  it("names each tarball after its own package's version", () => {
+    inScratchRepo("1.2.3", "4.5.6-rc.1", (root, bin) => {
+      const result = runPack(root, bin);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain("actana-sdk-1.2.3.tgz");
+      expect(result.stdout).toContain("actana-cli-4.5.6-rc.1.tgz");
+    });
+  });
+
+  it("refuses a version that is not semver, on stderr and with exit 1", () => {
+    inScratchRepo("0.6.0-next.0", "latest", (root, bin) => {
+      const result = runPack(root, bin);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain("no valid semver version: latest");
     });
   });
 });
