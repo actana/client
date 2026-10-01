@@ -8,7 +8,8 @@
       "@actana/sdk/pairing/stores/postgres": ["src/pairing/stores/postgres.ts"],
       "@actana/sdk/core": ["src/core.ts"],
       "@actana/sdk/core/link-frames": ["src/core/browser.ts"],
-      "@actana/sdk/search": ["src/search.ts"]
+      "@actana/sdk/search": ["src/search.ts"],
+      "@actana/sdk/shared-key": ["src/shared-key.ts"]
     },
     "target": "ES2022",
     "lib": ["ES2022"],

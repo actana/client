@@ -1,7 +1,7 @@
 // `actana session` — the Sessions running on a Core (#129 D10, #160).
 //
-//   actana session start <project> [prompt]  start one; prints its id and exits
-//   actana session ls [project]              what is running, and what settled
+//   actana session start [prompt]            start one; prints its id and exits
+//   actana session ls                        what is running, and what settled
 //   actana session logs <session>            the transcript, rendered
 //   actana session resume <session> [prompt] pick a conversation back up
 //   actana session send <session> <text>     type into a running Session
@@ -40,7 +40,7 @@
 // prose out of a stream it is trying to parse.
 //
 // One more, which falls out of the last: **without `--json`, stdout carries the
-// Session id and nothing else.** `SESSION=$(actana session start web "fix it")` is
+// Session id and nothing else.** `SESSION=$(actana session start "fix it")` is
 // the shape of every script that will ever use this, and it works with `--wait`
 // as well as without it because the settled status goes to stderr too.
 
@@ -76,8 +76,8 @@ const UNHAPPY_STATUSES: ReadonlySet<string> = new Set(["terminated", "disconnect
 export const SESSION_HELP = `actana session — the Sessions running on a Core
 
 Usage
-  actana session start <project> [prompt]   start a Session; prints its id
-  actana session ls [project]               list Sessions on this Core
+  actana session start [prompt]             start a Session; prints its id
+  actana session ls                         list Sessions on this Core
   actana session logs <session>             print the transcript, rendered
   actana session resume <session> [prompt]  start a Session that continues one
   actana session send <session> <text>      write text into a running Session
@@ -92,7 +92,6 @@ Flags
                       send: block until the turn that text starts has ended
   --wait-timeout <s>  give up waiting after this many seconds, and say so
   --harness <name>    start: ${KNOWN_HARNESSES.join(", ")}
-  --cwd <path>        start: a directory on the Core, inside the Project
   --title <text>      start: what the Session is called in \`ls\`
   --raw               logs: the bytes, escape codes and all, unrendered
   --enter             send: follow the text with a carriage return
@@ -102,7 +101,7 @@ Flags
   --verbose           explain the steps, on stderr. Never prints a blob.
 
 A prompt or a text argument of \`-\` is read from stdin, so a long prompt can be
-piped in:  cat brief.md | actana session start web -
+piped in:  cat brief.md | actana session start -
 
 Sessions are the Core's, not this command's
   \`start\` exits as soon as the Core has the Session running, printing its id —
@@ -199,13 +198,17 @@ export async function runSessionCommand(
 // ─── The verbs ───────────────────────────────────────────────────────────────
 
 /**
- * `actana session start <project> [prompt]`.
+ * `actana session start [prompt]`.
  *
  * **Exits once the Core has the Session running** (#129 D6): the id goes to
  * stdout, the harness carries on without this process, and the socket closes.
  * `--wait` keeps the connection open until the Core reports the Session settled
  * — which is the Core's report off its event log, never a guess made here from
  * how quiet the output went.
+ *
+ * Takes a Core (via selection / `--core`), a harness (via `--harness` or
+ * {@link DEFAULT_HARNESS}) and a prompt. There is no Project and no `--cwd`:
+ * every Session starts in the Core's workspace (ADR 0041 D1–D2).
  */
 async function sessionStart(
   deps: ClientDeps,
@@ -217,15 +220,13 @@ async function sessionStart(
     "--wait",
     "--wait-timeout",
     "--harness",
-    "--cwd",
     "--title",
     "--dangerously-skip-permissions",
   ]);
   if (misused) return usage(deps, "start", misused);
 
-  const [project, ...promptWords] = rest;
-  if (project === undefined) {
-    return usage(deps, "start", "a project is required — `actana session start <project> [prompt]`");
+  if (args.cwd !== null) {
+    return usage(deps, "start", "`--cwd` is gone — every Session starts in the Core's workspace");
   }
 
   const timeout = waitTimeoutMs(args);
@@ -240,17 +241,15 @@ async function sessionStart(
     );
   }
 
-  const prompt = await readText(deps, promptWords);
+  const prompt = await readText(deps, rest);
   if (prompt.error) return usage(deps, "start", prompt.error);
 
   return withGateway(deps, args, paths, "start", async (gateway) => {
-    deps.verbose(`starting a session in ${project}`);
+    deps.verbose("starting a session");
     const session = await gateway.start({
-      project,
       ...(prompt.text === null ? {} : { prompt: prompt.text }),
       ...(args.title === null ? {} : { title: args.title }),
       harness,
-      cwd: args.cwd,
       dangerouslySkipPermissions: args.skipPermissions,
     });
     return reportStartedSession(deps, args, session, timeout.ms);
@@ -300,8 +299,7 @@ async function reportStartedSession(
   timeoutMs: number | null,
 ): Promise<number> {
   try {
-    const where = session.project ?? session.projectId;
-    deps.err(`Started ${session.harness} in ${where} — session ${session.sessionId}, pty ${session.ptyId}.`);
+    deps.err(`Started ${session.harness} — session ${session.sessionId}, pty ${session.ptyId}.`);
     deps.verbose(`command: ${session.command}`);
     // Issue 177 finding 4, said out loud rather than left to be discovered.
     // Not `verbose`: an operator who has to know this is precisely one who has
@@ -447,7 +445,7 @@ async function sessionWait(
   });
 }
 
-/** `actana session ls [project]` — every Session on the Core, newest first. */
+/** `actana session ls` — every Session on the Core, newest first. */
 async function sessionLs(
   deps: ClientDeps,
   args: ParsedArgs,
@@ -456,19 +454,24 @@ async function sessionLs(
 ): Promise<number> {
   const misused = misusedFlag(args, []);
   if (misused) return usage(deps, "ls", misused);
-
-  const [project, ...extra] = rest;
-  if (extra.length > 0) return usage(deps, "ls", `unexpected argument "${extra[0]}"`);
+  if (rest.length > 0) {
+    return usage(
+      deps,
+      "ls",
+      `unexpected argument "${rest[0]}" — Projects are gone; \`actana session ls\` lists every Session on the Core`,
+    );
+  }
 
   return withGateway(deps, args, paths, "ls", async (gateway) => {
-    const rows = await gateway.list(project ?? null);
+    const rows = await gateway.list();
+    rows.sort((a, b) => b.updatedAt - a.updatedAt);
 
     if (args.json) {
       deps.out(formatJson(rows));
       return EXIT_OK;
     }
     if (rows.length === 0) {
-      deps.out(project === undefined ? "No sessions on this Core." : `No sessions in ${project}.`);
+      deps.out("No sessions on this Core.");
       return EXIT_OK;
     }
 
@@ -477,11 +480,8 @@ async function sessionLs(
     // would read as "nobody may write" rather than "this Core does not answer
     // that question".
     const locks = rows.some((row) => row.lock !== null);
-    const header = [
-      ...["SESSION", "STATUS", "LIVE", "HARNESS", "PROJECT"],
-      ...(locks ? ["LOCK"] : []),
-      ...["AGE", "TITLE"],
-    ];
+    const now = deps.now();
+    const header = ["SESSION", "STATUS", "LIVE", "HARNESS", "TITLE", ...(locks ? ["LOCK"] : []), "AGE"];
     const table = formatTable(
       header,
       rows.map((row) => [
@@ -489,10 +489,9 @@ async function sessionLs(
         row.status,
         row.live ? "yes" : "",
         row.harness,
-        row.project ?? row.projectId,
-        ...(locks ? [lockCell(row)] : []),
-        age(deps.now(), row.updatedAt),
         row.title,
+        ...(locks ? [lockCell(row)] : []),
+        age(now, row.updatedAt),
       ]),
     );
     for (const line of table) deps.out(line);
@@ -831,8 +830,6 @@ function startedFields(session: StartedSession): Record<string, unknown> {
     // status means "still working" or "never started" needs the answer as a
     // field, not as a sentence on stderr it would have to parse.
     reportsTurnStart: session.reportsTurnStart,
-    projectId: session.projectId,
-    project: session.project,
   };
 }
 

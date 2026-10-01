@@ -20,7 +20,6 @@ describe("core-link-frames", () => {
         reqId: "r1",
         opts: {
           sessionId: "t1",
-          cwd: "/tmp",
           command: "claude",
           agent: "claude-code",
         },
@@ -72,19 +71,21 @@ describe("core-link-frames", () => {
 
     it("parses session/hook op frames", () => {
       const frames: CoreLinkRequestFrame[] = [
-        { type: "sessionRowsList", reqId: "r1", projectId: "p1" },
-        { type: "sessionRowsList", reqId: "r2" },
-        { type: "archivedSessionRowsList", reqId: "r8", projectId: "p1" },
-        { type: "archivedSessionRowsList", reqId: "r9" },
+        { type: "sessionRowsList", reqId: "r1" },
+        { type: "archivedSessionRowsList", reqId: "r8" },
         {
           type: "sessionsMutate",
           reqId: "r3",
           mutation: { op: "update", sessionId: "t1", status: "running" },
         },
-        { type: "sessionsList", reqId: "r4", projectId: "p1" },
+        {
+          type: "sessionsMutate",
+          reqId: "r3b",
+          mutation: { op: "create", title: "n", agent: "claude-code" },
+        },
+        { type: "sessionsList", reqId: "r4" },
         { type: "hooksOp", reqId: "r5", hook: { op: "list", sessionId: "t1" } },
         { type: "hooksOp", reqId: "r6", hook: { op: "enable", hookId: "h1" } },
-        { type: "projectsList", reqId: "r7" },
       ];
       for (const frame of frames) {
         const parsed = parseCoreLinkRequestFrame(JSON.stringify(frame));
@@ -98,6 +99,16 @@ describe("core-link-frames", () => {
         { type: "archivedTasksList", reqId: "r2" },
         { type: "tasksMutate", reqId: "r3", mutation: { op: "update", taskId: "t1", status: "running" } },
         { type: "findByTask", reqId: "r4", taskId: "t1" },
+      ];
+      for (const frame of legacy) {
+        expect(parseCoreLinkRequestFrame(JSON.stringify(frame))).toBeNull();
+      }
+    });
+
+    it("drops Project frames instead of answering them (hard cut, no Projects)", () => {
+      const legacy = [
+        { type: "projectsList", reqId: "r1" },
+        { type: "projectsMutate", reqId: "r2", mutation: { op: "create", name: "x", path: "/x" } },
       ];
       for (const frame of legacy) {
         expect(parseCoreLinkRequestFrame(JSON.stringify(frame))).toBeNull();
@@ -235,7 +246,6 @@ describe("core-link-frames", () => {
         sessions: [
           {
             sessionId: "t1",
-            projectId: "p1",
             title: "fix bug",
             titleManuallySet: false,
             claudeSessionId: null,
@@ -260,7 +270,6 @@ describe("core-link-frames", () => {
         sessions: [
           {
             sessionId: "t1",
-            projectId: "p1",
             title: "old work",
             titleManuallySet: false,
             claudeSessionId: null,
@@ -277,44 +286,6 @@ describe("core-link-frames", () => {
       expect(parsed).toEqual(frame);
     });
 
-    it("round-trips a projectsListResult response carrying project snapshots", () => {
-      const frame: CoreLinkServerFrame = {
-        type: "projectsListResult",
-        reqId: "r1",
-        projects: [
-          {
-            projectId: "p1",
-            name: "mission-control",
-            path: "/home/op/mission-control",
-            icon: "MC",
-            iconColor: "#7ce58a",
-            pinned: true,
-            rememberHarnessSettings: true,
-            savedHarness: "claude-code",
-            savedSkipPermissions: false,
-            savedBareSession: false,
-            defaultGridView: true,
-            updatedAt: 1_700_000_000_000,
-          },
-          {
-            projectId: "p2",
-            name: "scratch",
-            path: "/home/op/scratch",
-            icon: "SC",
-            iconColor: "#e5484d",
-            pinned: false,
-            rememberHarnessSettings: false,
-            savedHarness: null,
-            savedSkipPermissions: false,
-            savedBareSession: false,
-            defaultGridView: false,
-            updatedAt: 1_700_000_000_001,
-          },
-        ],
-      };
-      const parsed = JSON.parse(serializeCoreLinkFrame(frame));
-      expect(parsed).toEqual(frame);
-    });
 
     it("round-trips a spawned response", () => {
       const frame: CoreLinkServerFrame = {
@@ -439,16 +410,17 @@ describe("core-link-frames", () => {
     // fail a future edit that bumps the version *for the multiConnection
     // surface*, and whoever reads that failure needs the reason, not the
     // number. It did not bump for multiConnection and never will; 0.16.0 was
-    // the `exec` frame (issue 266), 0.17.0 is the stamped write (issue
-    // 289) and 0.18.0 is the Task-to-Session rename (client#10): frames rather
-    // than ready capabilities, so none of them the additive case D11 carves out.
-    it("is 0.18.0 — moved for `exec` (#266), the stamped write (#289) and the Task-to-Session rename (client#10), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
-      expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.18.0");
+    // the `exec` frame (issue 266), 0.18.0 is the stamped write (issue 289),
+    // and 0.19.0 covers both the Shared-folder frames (client#4) and the
+    // Projects removal (client#10 part 3): frames rather than ready
+    // capabilities, so none of them the additive case D11 carves out.
+    it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Task-to-Session rename, the Shared-folder frames (client#4) and the Projects removal (client#10), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
+      expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.19.0");
     });
 
-    it("marks a 0.17.0 Core incompatible — the rename is a hard cut, so the gate refuses before a frame goes out", () => {
-      expect(coreLinkProtocolCompatible("0.17.0")).toBe(false);
-      expect(coreLinkProtocolCompatible("0.18.0")).toBe(true);
+    it("marks a 0.18.0 Core incompatible — Shared-folder frames carry a key and Projects are a hard cut, so the gate refuses before a frame goes out", () => {
+      expect(coreLinkProtocolCompatible("0.18.0")).toBe(false);
+      expect(coreLinkProtocolCompatible("0.19.0")).toBe(true);
     });
 
     it("leaves a Core that announces no multiConnection capability fully compatible — absence is a supported state, not drift", () => {

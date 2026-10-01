@@ -53,9 +53,6 @@ function baseDeps(f: CliFixture, argv: string[], out: string[], err: string[]): 
     openSessions: async () => {
       throw new Error("unexpected sessions");
     },
-    openFiles: async () => {
-      throw new Error("unexpected files");
-    },
     now: () => Date.now(),
     terminal: nonInteractiveTerminal(() => {}),
     openShell: async () => {

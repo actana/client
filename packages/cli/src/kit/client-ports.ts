@@ -10,10 +10,6 @@ export type { CorePairingPort } from "../core/core-pair.ts";
 export type { OpenCoreShellFn, CoreShellChannel, CoreShellExit } from "../core/core-shell-channel.ts";
 export type { OpenSessionGateway, SessionGateway } from "../core/session-gateway.ts";
 export type {
-  OpenProjectFilesFn,
-  ProjectFilesGateway,
-} from "../core/project-files-gateway.ts";
-export type {
   OpenSessionAttachFn,
   SessionAttachment,
   SessionAttachExit,

@@ -11,7 +11,6 @@ import { terminalFromProcess } from "./kit/cli-terminal.ts";
 import { connectCore } from "./core/core-connection.ts";
 import { sdkCorePairing } from "./core/core-pair.ts";
 import { openSessionGateway } from "./core/session-gateway.ts";
-import { openProjectFiles } from "./core/project-files-gateway.ts";
 import { openSessionAttach } from "./core/session-attach-channel.ts";
 import { nodeClientPrompts } from "./kit/node-system.ts";
 import { EXIT_FAILURE } from "./kit/exit-codes.ts";
@@ -55,7 +54,6 @@ async function main(argv: string[]): Promise<number> {
     connect: connectCore,
     pairing: sdkCorePairing,
     openSessions: openSessionGateway,
-    openFiles: openProjectFiles,
     now: () => Date.now(),
     terminal: terminalFromProcess(process),
     openShell: openCoreShell,

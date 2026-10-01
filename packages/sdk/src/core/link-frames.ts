@@ -33,7 +33,6 @@ export type CoreLinkPtySpawnHarness = "claude-code" | "codex" | "cursor-cli" | "
 
 export type CoreLinkBaseSpawnOptions = {
   sessionId: string;
-  cwd: string;
   command: string;
   args?: string[];
   cols?: number;
@@ -67,12 +66,11 @@ export type CoreLinkShellSpawnOptions = CoreLinkBaseSpawnOptions & {
 /**
  * A VM Shell Session spawn (issue 06) — a free-form interactive shell on the
  * Core's machine, distinct from agent workspaces. `shellSession: true` is
- * its own spawn mode: no `agent`, no `cwd`/project-root requirement (a VM shell
- * has no project folder). The Core skips the project-root validation it
- * applies to agent spawns and starts a login shell at its own home. Gated by
- * core-link auth (mTLS + bearer), never auto-spawned — opened by an explicit
- * Panel gesture. Streamed back over the same multiplexed core-link; replayable
- * on reconnect like any other PTY.
+ * its own spawn mode: no `agent`. Every Session — agent or VM shell — starts
+ * in the Core's workspace (`~`); there is no Project and no cwd on spawn
+ * (actana/control#555, ADR 0041 D1–D2). Gated by core-link auth (mTLS + bearer),
+ * never auto-spawned — opened by an explicit Panel gesture. Streamed back over
+ * the same multiplexed core-link; replayable on reconnect like any other PTY.
  */
 export type CoreLinkShellSessionSpawnOptions = {
   shellSession: true;
@@ -146,23 +144,25 @@ export type CoreLinkEvent = {
 //
 // The schema carries session/hook ops alongside PTY ops, keyed by the
 // same `ptyId`/`sessionId` model. They use `reqId` correlation like the PTY RPCs.
-// Issue 04 (ADR 0004) makes session/project mutations real: the Core process
-// owns the write path directly against its SQLite (no sibling stateful server
-// on remote VMs), so `projectsMutate` / `sessionsMutate` land rows via
-// `core-mutation-store` and append `project:created` / `session:updated` etc.
-// events to the same monotonic event log the PTY lifecycle events use.
+// Issue 04 (ADR 0004) made session mutations real: the Core process owns the
+// write path directly against its SQLite (no sibling stateful server on remote
+// VMs), so `sessionsMutate` lands rows via `core-mutation-store` and appends
+// `session:updated` etc. events to the same monotonic event log the PTY
+// lifecycle events use. Projects are gone (ADR 0041 D1, actana/control#555):
+// there is no `projectsMutate` and no `project:*` event.
 
 export type CoreLinkSessionStatus = string;
 
 /**
- * A session mutation — `create` (a new session under an existing project), `update`
+ * A session mutation — `create` (a new session in the Core's workspace), `update`
  * (patch an existing session row), or `delete` (remove one). The discriminant lets
  * the Core dispatch to `createSession` / `updateSession` / `deleteSession` without a
  * nullable-id sniff.
  *
- * On `create`, `projectId`, `title`, and `agent` are required — everything
- * else defaults on the Core (status → `ready`, pinned/archived → false).
- * `sessionId` is optional; when omitted the Core generates one.
+ * On `create`, `title` and `agent` are required — everything else defaults on the
+ * Core (status → `ready`, pinned/archived → false). There is no Project: Sessions
+ * always start in `~` (ADR 0041 D1–D2, actana/control#555). `sessionId` is optional;
+ * when omitted the Core generates one.
  *
  * On `update`, `sessionId` is required and identifies the row; any of
  * `status`/`title`/`pinned`/`archived` may be set. Fields omitted are left
@@ -177,7 +177,6 @@ export type CoreLinkSessionMutation =
   | {
       op: "create";
       sessionId?: string;
-      projectId: string;
       title: string;
       agent: string;
       status?: CoreLinkSessionStatus;
@@ -221,85 +220,6 @@ export type CoreLinkSessionMutation =
       op: "delete";
       sessionId: string;
     };
-
-/**
- * A project mutation — `create`, `rename`, or `archive`. The Core validates
- * the VM path on `create` (absolute, resolvable, not a file) and rejects with
- * an `error` frame if invalid — a Project's path is a VM path and only the
- * Core can validate it (CONTEXT.md "Project").
- *
- * `archive` deletes the project row (SQLite cascades sessions under
- * this project via ON DELETE CASCADE — that is the shared-DB shape). The word
- * "archive" is used at the protocol layer to match the ticket's language and
- * to leave room for a future soft-archive column without changing the frame
- * shape; today it is destructive.
- */
-export type CoreLinkProjectMutation =
-  | {
-      op: "create";
-      projectId?: string;
-      name: string;
-      path: string;
-      icon?: string;
-      iconColor?: string;
-      pinned?: boolean;
-      /**
-       * The remembered session settings the Create Project dialog collected
-       * (issue 22). Omitted fields fall back to the column defaults, so a
-       * caller that only names the project still creates a valid row.
-       */
-      rememberHarnessSettings?: boolean;
-      savedHarness?: string | null;
-      savedSkipPermissions?: boolean;
-      savedBareSession?: boolean;
-      defaultGridView?: boolean;
-    }
-  | { op: "rename"; projectId: string; name: string }
-  | { op: "archive"; projectId: string }
-  /**
-   * Pin / unpin a project (issue 10). Pin state is a Core fact stored on
-   * the project row; every Panel connected to the same Core sees the same
-   * value. Dedicated op (rather than piggy-backing on a generic
-   * `updateProject` patch) so the event kind can be `project:pinnedChanged`
-   * — a reconnecting Panel replays pin flips distinctly from other project
-   * edits.
-   */
-  | { op: "pin"; projectId: string; pinned: boolean }
-  /**
-   * Patch a project's remembered session settings (issue 22) — the "Remember
-   * settings for this project" checkbox and the grid-view default. These are
-   * Core facts on the project row, so every Panel connected to the same Core
-   * converges on them, exactly as pin state does.
-   *
-   * Follows the `pin` precedent rather than becoming a generic field patch: a
-   * dedicated op earns its own `project:settingsChanged` event kind, so a
-   * reconnecting Panel replays a settings change distinctly from a rename.
-   * Fields left `undefined` are untouched; `savedHarness: null` clears it.
-   */
-  | {
-      op: "settings";
-      projectId: string;
-      rememberHarnessSettings?: boolean;
-      savedHarness?: string | null;
-      savedSkipPermissions?: boolean;
-      savedBareSession?: boolean;
-      defaultGridView?: boolean;
-    }
-  /**
-   * Patch a project's icon and icon colour (issue 98). Both live on the Core's
-   * project row and already travel in {@link CoreLinkProjectSnapshot}, and
-   * `create` accepts them — but until this op nothing could change them
-   * afterwards, so the Edit-project dialog PATCHed them at a Panel row a
-   * Core-owned project does not have, and 404'd.
-   *
-   * Follows the `pin` / `settings` precedent rather than widening `rename` into
-   * a generic field patch: a dedicated op earns its own
-   * `project:appearanceChanged` event kind, so a reconnecting Panel replays an
-   * icon change distinctly from a rename. Fields left `undefined` are
-   * untouched; a blank string is not an erase (both columns are NOT NULL) and
-   * is ignored.
-   */
-  | { op: "appearance"; projectId: string; icon?: string; iconColor?: string };
 
 export type CoreLinkHookOp =
   | { op: "list"; sessionId?: string }
@@ -397,12 +317,10 @@ export type CoreLinkHarnessInstallFailedPayload = {
 
 // ─── Directory browsing (web-panel issue 06) ────────────────────────────────
 //
-// Adding a Project means naming a folder on the Core's machine. The Panel runs
-// in a browser now, so it has no filesystem of its own to offer and the
-// operator's laptop is the wrong machine to browse — the only process that can
-// honestly answer "what folders exist here" is the Core that owns the disk.
-// These two frames are that answer: a listing walk (`dirList`) and the one
-// write the picker needs (`dirCreate`).
+// These two frames let a Panel browse the Core's disk: a listing walk
+// (`dirList`) and the one write a folder picker needs (`dirCreate`). They were
+// introduced for the Create-Project dialog; Projects are gone (ADR 0041 D1),
+// and whether anything else still uses them is actana/control#555's to settle.
 //
 // Failures come back as the ordinary `error` frame carrying a message written
 // for the operator ("Folder not found", "No permission to create a folder
@@ -571,7 +489,8 @@ export type CoreLinkSessionLockState = "unlocked" | "held-by-you" | "held-by-ano
  * The kind appended to the event log on every Session-lock change (ADR 0024 D8).
  *
  * A **dedicated kind**, following the precedent ADR 0022 set for
- * `project:appearanceChanged` — and for the same reason both ADR 0017 and ADR
+ * `project:appearanceChanged` (a Project event that this protocol no longer
+ * carries — ADR 0041 D1) — and for the same reason both ADR 0017 and ADR
  * 0022 rejected the alternative. Widening an existing mutation event to carry
  * lock state would stop the frame documenting what changed: every client would
  * have to refetch on every `session:updated` to find out whether this one was
@@ -895,12 +814,12 @@ export type CoreLinkRequestFrame =
   // this on connect, and has no lock table to transfer out of.
   | { type: "reclaim"; reqId: string; clientId: string }
   // ─── Session row ops (issue 02 — schema carries session ops keyed by sessionId) ───
-  | { type: "sessionRowsList"; reqId: string; projectId?: string }
+  | { type: "sessionRowsList"; reqId: string }
   // The Archived view's own read path (issue 62, ADR 0019). Deliberately a
   // second frame rather than a flag on `sessionRowsList`: archived rows then cannot
   // ride the active/Fleet answer whatever a caller passes. Sent only while
   // that view is open — the count that gates it rides `sessionRowsListResult`.
-  | { type: "archivedSessionRowsList"; reqId: string; projectId?: string }
+  | { type: "archivedSessionRowsList"; reqId: string }
   | { type: "sessionsMutate"; reqId: string; mutation: CoreLinkSessionMutation }
   /**
    * A prompt the operator submitted, for a harness whose hooks do not report
@@ -918,15 +837,8 @@ export type CoreLinkRequestFrame =
    * left alone.
    */
   | { type: "harnessPrompt"; reqId: string; sessionId: string; prompt: string }
-  // ─── Project ops (issue 07 — per-Core navigation: list the Core's
-  // projects as live snapshots, no Panel-side persistence) ───
-  | { type: "projectsList"; reqId: string }
-  // ─── Project mutations (issue 04 — write path on remote Cores). The
-  // Core owns the write against its SQLite (ADR 0004); path validation
-  // happens Core-side because a Project's path is a VM path. ───
-  | { type: "projectsMutate"; reqId: string; mutation: CoreLinkProjectMutation }
   // ─── Live-session ops (observe a session's lifecycle / reattach) ───
-  | { type: "sessionsList"; reqId: string; projectId?: string }
+  | { type: "sessionsList"; reqId: string }
   // ─── Hook ops (list / enable / disable hooks for a session) ───
   | { type: "hooksOp"; reqId: string; hook: CoreLinkHookOp }
   // ─── Bearer auth (issue 04) ───
@@ -975,7 +887,33 @@ export type CoreLinkRequestFrame =
       command: string;
       args: string[];
       cwd?: string | null;
-    };
+    }
+  // ─── Shared-folder storage, controller → Core (client#4) ───
+  // Sent by the controller, never by a Panel. Each is answered by one
+  // `sharedStatus` carrying the same `reqId`, and each is gated by the `shared`
+  // capability on `ready`. `credentials` is secret: see
+  // {@link CoreLinkSharedCredentials}. `expiresAt` is an ISO 8601 instant; the
+  // controller pushes `sharedCredentials` about 15 minutes before it, at most
+  // half the key's life.
+  | {
+      type: "sharedAttach";
+      reqId: string;
+      endpoint: string;
+      bucket: string;
+      prefix: string;
+      region: string;
+      credentials: CoreLinkSharedCredentials;
+      expiresAt: string;
+    }
+  | {
+      type: "sharedCredentials";
+      reqId: string;
+      credentials: CoreLinkSharedCredentials;
+      expiresAt: string;
+    }
+  // `keepLocalCopy` is `true` only: removing the local files is not a thing
+  // this protocol can ask for yet.
+  | { type: "sharedDetach"; reqId: string; keepLocalCopy: true };
 
 // ─── Server → Client (Core → Panel) ──────────────────────────────────────
 
@@ -1053,6 +991,57 @@ export type CoreLinkMultiConnectionCapability = { version: 1 };
  */
 export type CoreLinkFilesCapability = { version: 1 };
 
+/**
+ * The `shared` capability, announced on `ready` (client#4, actana/control#552).
+ *
+ * Says that this Core can mount a Shared folder: it answers `sharedAttach`,
+ * `sharedCredentials` and `sharedDetach` with a `sharedStatus`. Absence is a
+ * supported state and not a fault, on the terms `multiConnection` and `files`
+ * set — a controller that reads it absent withholds the three frames and does
+ * not offer the affordance.
+ *
+ * `version` is the capability's own number, independent of
+ * {@link CORE_LINK_PROTOCOL_VERSION}.
+ */
+export type CoreLinkSharedCapability = { version: 1 };
+
+/**
+ * The short-lived S3 key a Core mounts a Shared folder with.
+ *
+ * **Secret material.** Never logged, never echoed, never part of an error
+ * message: use {@link redactCoreLinkSharedFrame} or {@link describeCoreLinkSharedFrame}
+ * wherever a frame that carries one could be printed.
+ *
+ * This is the one definition of the three key fields: the Shared-folder key issuer
+ * (`shared-key/types.ts`) type-imports it for `SharedKey`, which adds `expiresAt: Date`.
+ * The import runs that way because this module imports nothing (ADR 0025 D2).
+ */
+export type CoreLinkSharedCredentials = {
+  accessKeyId: string;
+  secretAccessKey: string;
+  sessionToken: string;
+};
+
+/**
+ * What a Core reports about its Shared-folder mount, on every `sharedStatus`.
+ * It names no credential and its `message` never carries one.
+ *
+ * - `attached` — mounted; `expiresAt` is when the key the Core holds stops working.
+ * - `detached` — not mounted; `keptLocalCopy` says whether the local files were kept.
+ * - `error` — the request was refused or the mount failed; the mount is unchanged.
+ */
+export type CoreLinkSharedMountStatus =
+  | { state: "attached"; expiresAt: string }
+  | { state: "detached"; keptLocalCopy: boolean }
+  | { state: "error"; code: CoreLinkSharedErrorCode; message: string };
+
+/** Why a Shared-folder request failed. Open: an unknown code reads as a plain error. */
+export type CoreLinkSharedErrorCode =
+  | "invalid-frame"
+  | "not-attached"
+  | "already-attached"
+  | "mount-failed";
+
 /** Response frame — correlates to a request via `reqId`. */
 export type CoreLinkResponseFrame =
   | {
@@ -1084,6 +1073,13 @@ export type CoreLinkResponseFrame =
        * to withhold.
        */
       files?: CoreLinkFilesCapability;
+      /**
+       * Present on a Core that can mount a Shared folder (client#4). Absent
+       * means it cannot, and a controller must not send the `shared*` frames:
+       * an older Core would reject them as unknown request types anyway.
+       * Absence is a supported state, on `multiConnection`'s terms.
+       */
+      shared?: CoreLinkSharedCapability;
     }
   | {
       type: "spawned";
@@ -1213,9 +1209,6 @@ export type CoreLinkResponseFrame =
    * normal outcome the Core does not report on.
    */
   | { type: "harnessPromptResult"; reqId: string; accepted: boolean }
-  // ─── Project op responses (issue 07 — per-Core navigation, issue 04 — writes) ───
-  | { type: "projectsListResult"; reqId: string; projects: CoreLinkProjectSnapshot[] }
-  | { type: "projectsMutateResult"; reqId: string; project: CoreLinkProjectSnapshot | null }
   | { type: "sessionsListResult"; reqId: string; sessions: CoreLinkSessionSnapshot[] }
   | { type: "hooksOpResult"; reqId: string; hooks: CoreLinkHookEntry[] }
   // ─── Bearer auth responses (issue 04) ───
@@ -1269,55 +1262,24 @@ export type CoreLinkResponseFrame =
    * reads the code when it is there and falls back to the message when it is
    * not. See {@link SESSION_LOCKED_ERROR_CODE}, its first and so far only value.
    */
-  | { type: "error"; reqId?: string; message: string; code?: CoreLinkErrorCode };
-
-/**
- * A flattened project snapshot carried over the core-link (issue 07). The
- * Core is the source of truth for projects; the Panel holds none. The shape
- * mirrors the server's project row so the Panel can render per-Core navigation
- * without a separate HTTP round-trip per project.
- *
- * `path` is a VM path — only the Core can validate it (CONTEXT.md
- * "Project": "A Project's path is a VM path. Only the Core can validate
- * it."). The Panel renders it as-is and never assumes it exists locally.
- */
-export type CoreLinkProjectSnapshot = {
-  projectId: string;
-  name: string;
-  /** Absolute path on the Core's machine (a VM path, not a Panel path). */
-  path: string;
-  /** 2-letter monogram shown in the Panel (mirrors the projects table). */
-  icon: string;
-  /** Hex color for the icon background. */
-  iconColor: string;
-  pinned: boolean;
+  | { type: "error"; reqId?: string; message: string; code?: CoreLinkErrorCode }
   /**
-   * Remembered session settings (issue 22). Core facts on the project row —
-   * the Panel holds no copy, so a second Panel on the same Core reads the
-   * same values, the way pin state already behaves.
-   *
-   * `savedSkipPermissions` is carried for symmetry with the column that
-   * already exists; nothing on the launch path reads it. Auto-mode is the
-   * unconditional default for every Harness that has such a flag, so wiring
-   * this back into a session launch would reintroduce the removed control.
+   * The reply to every `sharedAttach`, `sharedCredentials` and `sharedDetach`
+   * (client#4): the mount's status after the request was handled. A refusal is
+   * `status.state === "error"` here rather than a generic `error` frame, so the
+   * answer to a Shared-folder request is always this frame. Carries no secret.
    */
-  rememberHarnessSettings: boolean;
-  savedHarness: string | null;
-  savedSkipPermissions: boolean;
-  savedBareSession: boolean;
-  defaultGridView: boolean;
-  updatedAt: number;
-};
+  | { type: "sharedStatus"; reqId: string; status: CoreLinkSharedMountStatus };
 
 /**
  * A flattened session snapshot carried over the core-link. The Core is the
  * source of truth for sessions; the Panel holds none. The shape mirrors the
  * server's session row so the Panel can render a fleet view without a separate
- * HTTP round-trip per session.
+ * HTTP round-trip per session. There is no Project field: Sessions belong to
+ * the Core's workspace (ADR 0041 D1, actana/control#555).
  */
 export type CoreLinkSessionRow = {
   sessionId: string;
-  projectId: string;
   title: string;
   /**
    * True once an operator has renamed this Session (issue 84). The Core's
@@ -1430,7 +1392,7 @@ export type CoreLinkServerFrame =
  * types), and a Panel hydrating from an older Core sees an empty
  * availability map and falls back to the same "checking…" affordance a fresh
  * boot shows. Issue 10 adds a dedicated `pin` op to
- * {@link CoreLinkProjectMutation} plus the `project:pinnedChanged` /
+ * `CoreLinkProjectMutation` (removed in 0.19.0) plus the `project:pinnedChanged` /
  * `session:pinnedChanged` event kinds (session pin-only updates now surface
  * distinctly, mirroring the icon-only path from issue 09) → 0.8.0. Web-panel
  * issue 06 adds the `dirList` / `dirCreate` request frames and their results,
@@ -1438,9 +1400,9 @@ export type CoreLinkServerFrame =
  * machine-local dialog that no longer exists → 0.9.0. Additive: a Core that
  * has not been upgraded rejects the unknown request type, which the Panel
  * surfaces as the same actionable error any other failed listing produces.
- * Issue 22 adds a `settings` op to {@link CoreLinkProjectMutation}, the same
+ * Issue 22 adds a `settings` op to `CoreLinkProjectMutation`, the same
  * remembered-settings fields on its `create` variant, those fields on
- * {@link CoreLinkProjectSnapshot}, and the `project:settingsChanged` event
+ * `CoreLinkProjectSnapshot`, and the `project:settingsChanged` event
  * kind → 0.10.0. Every column they land in already exists in the shared
  * schema bootstrap, so no migration rides along. Unlike the additive bumps
  * above, there is no partial-compatibility story to describe here and none is
@@ -1483,14 +1445,14 @@ export type CoreLinkServerFrame =
  * probing and installing, and still publishes availability as the one source of
  * truth. Same rule as the bumps above: the minor moved, so a Core on 0.13.0
  * renders as "needs update" rather than one that silently drops the frame.
- * Issue 98 adds an `appearance` op to {@link CoreLinkProjectMutation} and the
- * `project:appearanceChanged` event kind the Core appends for it → 0.15.0
- * (ADR 0022). A project's icon and icon colour are Core facts that `create`
- * could set and nothing could change afterwards, so the Edit-project dialog
- * PATCHed them at a Panel row a Core-owned project does not have, and 404'd with
- * the rename already applied. Same rule as above: the minor moved, so a Core on
- * 0.14.0 is "needs update" rather than one that takes the frame and drops the
- * op. The columns (`icon`, `icon_color`) have been in the shared schema
+ * Issue 98 adds an `appearance` op to `CoreLinkProjectMutation` (removed in
+ * 0.19.0) and the `project:appearanceChanged` event kind the Core appends for it
+ * → 0.15.0 (ADR 0022). A project's icon and icon colour are Core facts that
+ * `create` could set and nothing could change afterwards, so the Edit-project
+ * dialog PATCHed them at a Panel row a Core-owned project does not have, and
+ * 404'd with the rename already applied. Same rule as above: the minor moved, so
+ * a Core on 0.14.0 is "needs update" rather than one that takes the frame and
+ * drops the op. The columns (`icon`, `icon_color`) have been in the shared schema
  * bootstrap since the fork, so no migration rides along on the Core's side.
  *
  * Issue 142 adds the `ptySubscribe` / `ptyUnsubscribe` frames and their acks —
@@ -1625,10 +1587,28 @@ export type CoreLinkServerFrame =
  * understand each other. The minor moves so {@link coreLinkProtocolCompatible} refuses
  * the pair before a frame goes out.
  *
+ * **0.19.0 covers two wire changes that landed on the same minor
+ * (actana/client#4 Shared-folder frames, and actana/client#10 part 3 Projects
+ * removal / actana/control#555).** No published SDK carries 0.19.0 (`latest`
+ * 0.5.0 and `next` 0.6.0-next.0 are still 0.18.0), so both share this minor
+ * rather than bumping again. Shared-folder adds the controller-to-Core
+ * `sharedAttach`, `sharedCredentials` and `sharedDetach` request frames, their
+ * `sharedStatus` reply, and the optional `ready.shared` capability — the frames
+ * carry a secret key, so the gate refuses a Core that predates them before one
+ * goes out; `shared` then says whether a Core on this version can mount at all.
+ * Projects removal (ADR 0041 D1–D2) drops `projectsList` / `projectsMutate` and
+ * their results, every `project:*` event kind, `projectId` on
+ * {@link CoreLinkSessionRow} and on `sessionsMutate` create, the optional
+ * `projectId` filter on the row and live-session list frames, and `cwd` on
+ * harness/shell spawn (every Session starts in `~`). Hard cut, no alias and no
+ * dual-read: a 0.18 Core and this build refuse each other at the version gate.
+ * The Files HTTPS routes stay at `/v1/projects/:id/files` until
+ * actana/control#557 re-roots them (client issue 10 part 4).
+ *
  * Patch stays 0 — see {@link coreLinkProtocolCompatible}, which compares
  * major.minor only.
  */
-export const CORE_LINK_PROTOCOL_VERSION = "0.18.0";
+export const CORE_LINK_PROTOCOL_VERSION = "0.19.0";
 
 /**
  * Does a Core advertising `reported` speak this build's core-link?
@@ -1715,8 +1695,6 @@ const REQUEST_FRAME_TYPES: ReadonlySet<string> = new Set<CoreLinkRequestFrame["t
   "archivedSessionRowsList",
   "sessionsMutate",
   "harnessPrompt",
-  "projectsList",
-  "projectsMutate",
   "sessionsList",
   "hooksOp",
   "auth",
@@ -1725,6 +1703,9 @@ const REQUEST_FRAME_TYPES: ReadonlySet<string> = new Set<CoreLinkRequestFrame["t
   "dirList",
   "dirCreate",
   "exec",
+  "sharedAttach",
+  "sharedCredentials",
+  "sharedDetach",
 ]);
 
 /** Parse and validate a raw WS message into a known request frame, or null. */
@@ -1738,10 +1719,181 @@ export function parseCoreLinkRequestFrame(raw: string): CoreLinkRequestFrame | n
   if (!msg || typeof msg !== "object") return null;
   const type = (msg as { type?: unknown }).type;
   if (typeof type !== "string") return null;
-  return REQUEST_FRAME_TYPES.has(type) ? (msg as CoreLinkRequestFrame) : null;
+  if (!REQUEST_FRAME_TYPES.has(type)) return null;
+  // The Shared-folder frames carry a secret key, so unlike the rest they are
+  // checked field by field: a malformed one is refused here rather than handed
+  // to the mount code half-formed. The refusal names no value.
+  if (SHARED_REQUEST_TYPES.has(type) && !isValidSharedRequest(msg)) return null;
+  return msg as CoreLinkRequestFrame;
 }
 
 /** Serialize a server frame for sending over the WebSocket. */
 export function serializeCoreLinkFrame(frame: CoreLinkServerFrame): string {
   return JSON.stringify(frame);
+}
+
+// ─── Shared-folder frames (client#4) ─────────────────────────────────────────
+// Browser-safe like the rest of this module: no imports, no Node built-ins.
+
+const SHARED_REQUEST_TYPES: ReadonlySet<string> = new Set([
+  "sharedAttach",
+  "sharedCredentials",
+  "sharedDetach",
+]);
+
+/** What a redacted secret field reads as in any printed Shared-folder frame. */
+export const CORE_LINK_REDACTED = "[redacted]";
+
+/**
+ * Thrown by {@link parseCoreLinkSharedRequest}. The message names the frame type
+ * and the field that failed and **never a value**, so a frame carrying a key
+ * cannot leak it through an error, a log line or a stack trace.
+ */
+export class CoreLinkSharedFrameError extends Error {
+  override readonly name = "CoreLinkSharedFrameError";
+  readonly field: string;
+
+  constructor(frameType: string, field: string, problem: string) {
+    super(`invalid ${frameType} frame: ${field} ${problem}`);
+    this.field = field;
+  }
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+const isText = (v: unknown): v is string => typeof v === "string" && v.length > 0;
+
+function checkInstant(type: string, field: string, v: unknown): void {
+  if (!isText(v)) throw new CoreLinkSharedFrameError(type, field, "must be an ISO 8601 string");
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(v) || Number.isNaN(Date.parse(v))) {
+    throw new CoreLinkSharedFrameError(type, field, "must be an ISO 8601 instant");
+  }
+}
+
+function checkCredentials(type: string, v: unknown): void {
+  if (!isRecord(v)) throw new CoreLinkSharedFrameError(type, "credentials", "must be an object");
+  for (const key of ["accessKeyId", "secretAccessKey", "sessionToken"] as const) {
+    if (!isText(v[key])) throw new CoreLinkSharedFrameError(type, `credentials.${key}`, "must be a non-empty string");
+  }
+}
+
+function checkEndpoint(type: string, v: unknown): void {
+  if (!isText(v)) throw new CoreLinkSharedFrameError(type, "endpoint", "must be an http(s) URL");
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    // Never `cause`: the URL text is not a secret but the habit of chaining is not worth the risk.
+    throw new CoreLinkSharedFrameError(type, "endpoint", "must be an http(s) URL");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new CoreLinkSharedFrameError(type, "endpoint", "must be an http(s) URL");
+  }
+  if (url.username !== "" || url.password !== "") {
+    throw new CoreLinkSharedFrameError(type, "endpoint", "must not carry credentials");
+  }
+}
+
+/**
+ * Validate a raw Shared-folder request frame, or throw {@link CoreLinkSharedFrameError}.
+ * Returns the frame typed. Extra fields are refused for `credentials` (a stray key
+ * is not silently dropped) and ignored elsewhere, as every other frame does.
+ */
+export function parseCoreLinkSharedRequest(
+  raw: unknown,
+): Extract<CoreLinkRequestFrame, { type: "sharedAttach" | "sharedCredentials" | "sharedDetach" }> {
+  if (!isRecord(raw)) throw new CoreLinkSharedFrameError("shared", "frame", "must be an object");
+  const type = raw.type;
+  if (typeof type !== "string" || !SHARED_REQUEST_TYPES.has(type)) {
+    throw new CoreLinkSharedFrameError("shared", "type", "is not a Shared-folder frame");
+  }
+  if (!isText(raw.reqId)) throw new CoreLinkSharedFrameError(type, "reqId", "must be a non-empty string");
+  if (type === "sharedDetach") {
+    if (raw.keepLocalCopy !== true) throw new CoreLinkSharedFrameError(type, "keepLocalCopy", "must be true");
+    return raw as never;
+  }
+  if (type === "sharedAttach") {
+    checkEndpoint(type, raw.endpoint);
+    for (const key of ["bucket", "prefix", "region"] as const) {
+      if (!isText(raw[key])) throw new CoreLinkSharedFrameError(type, key, "must be a non-empty string");
+    }
+    if ((raw.prefix as string).startsWith("/")) {
+      throw new CoreLinkSharedFrameError(type, "prefix", "must not start with '/'");
+    }
+  }
+  checkCredentials(type, raw.credentials);
+  const extra = Object.keys(raw.credentials as object).filter(
+    (k) => k !== "accessKeyId" && k !== "secretAccessKey" && k !== "sessionToken",
+  );
+  // Neither the name nor the value: a caller-chosen key name is caller-chosen text.
+  if (extra.length > 0) throw new CoreLinkSharedFrameError(type, "credentials", "has an unknown field");
+  checkInstant(type, "expiresAt", raw.expiresAt);
+  return raw as never;
+}
+
+function isValidSharedRequest(raw: unknown): boolean {
+  try {
+    parseCoreLinkSharedRequest(raw);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Validate a raw `sharedStatus` reply, or throw {@link CoreLinkSharedFrameError}. */
+export function parseCoreLinkSharedStatus(
+  raw: unknown,
+): Extract<CoreLinkResponseFrame, { type: "sharedStatus" }> {
+  if (!isRecord(raw) || raw.type !== "sharedStatus") {
+    throw new CoreLinkSharedFrameError("sharedStatus", "type", "must be sharedStatus");
+  }
+  if (!isText(raw.reqId)) throw new CoreLinkSharedFrameError("sharedStatus", "reqId", "must be a non-empty string");
+  const status = raw.status;
+  if (!isRecord(status)) throw new CoreLinkSharedFrameError("sharedStatus", "status", "must be an object");
+  if (status.state === "attached") checkInstant("sharedStatus", "status.expiresAt", status.expiresAt);
+  else if (status.state === "detached") {
+    if (typeof status.keptLocalCopy !== "boolean") {
+      throw new CoreLinkSharedFrameError("sharedStatus", "status.keptLocalCopy", "must be a boolean");
+    }
+  } else if (status.state === "error") {
+    if (!isText(status.code)) throw new CoreLinkSharedFrameError("sharedStatus", "status.code", "must be a string");
+    if (typeof status.message !== "string") {
+      throw new CoreLinkSharedFrameError("sharedStatus", "status.message", "must be a string");
+    }
+  } else {
+    throw new CoreLinkSharedFrameError("sharedStatus", "status.state", "is not a known state");
+  }
+  return raw as never;
+}
+
+/**
+ * A copy of a frame with every credential value replaced by {@link CORE_LINK_REDACTED}.
+ * Frames that carry none come back unchanged. The one thing to call before a
+ * frame goes anywhere a person or a log could read it.
+ */
+export function redactCoreLinkSharedFrame<T extends CoreLinkRequestFrame | CoreLinkServerFrame>(frame: T): T {
+  const credentials = (frame as { credentials?: unknown }).credentials;
+  if (credentials === undefined) return frame;
+  const redacted: Record<string, string> = {};
+  if (isRecord(credentials)) {
+    // Every key, not just the three known ones: a stray field is as secret as a named one.
+    for (const key of Object.keys(credentials)) redacted[key] = CORE_LINK_REDACTED;
+  }
+  return { ...frame, credentials: redacted };
+}
+
+/** The debug formatter for a frame: `JSON.stringify` of {@link redactCoreLinkSharedFrame}. */
+export function describeCoreLinkSharedFrame(frame: CoreLinkRequestFrame | CoreLinkServerFrame): string {
+  return JSON.stringify(redactCoreLinkSharedFrame(frame));
+}
+
+/**
+ * Read the `shared` capability off a raw `ready` frame, or null.
+ * The same rule as {@link readFilesCapability}: null for anything but exactly
+ * `{ version: 1 }`, so an unknown future version reads as absent.
+ */
+export function readSharedCapability(raw: unknown): CoreLinkSharedCapability | null {
+  if (!raw || typeof raw !== "object") return null;
+  const version = (raw as { version?: unknown }).version;
+  return version === 1 ? { version: 1 } : null;
 }
