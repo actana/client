@@ -2,9 +2,8 @@
 //
 // The command runs against `fakeShared`, an in-memory `CoreShared`: what these
 // suites cover is the command's own part — which Core a path means, what reaches
-// stdout and stderr, the exit code — not a mode of the interface. The mode that
-// reaches a real Core is client PR 39; until it lands the factory's default is a
-// stub, and the last suite here pins what that stub says.
+// stdout and stderr, the exit code — not a mode of the interface. The factory that
+// binds the through-the-Core mode by default has its own suite, shared-gateway.test.ts.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -13,7 +12,7 @@ import { CoreSharedError } from "@actana/sdk/shared";
 import { fakeShared } from "./shared-fixture.ts";
 import { makeCliFixture, registerCore, sentinelBlobText, type CliFixture } from "./cli-harness.ts";
 import { openSharedThroughCore } from "../core/shared-gateway.ts";
-import { EXIT_FAILURE, EXIT_OK, EXIT_UNIMPLEMENTED, EXIT_USAGE } from "../kit/exit-codes.ts";
+import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "../kit/exit-codes.ts";
 
 let fixture: CliFixture | null = null;
 function cli(): CliFixture {
@@ -544,20 +543,6 @@ describe("actana shared, the command line", () => {
     const run = await cli().run(["--help"]);
 
     expect(run.out.join("\n")).toContain("shared     ls, get, put, rm, mkdir, watch");
-  });
-});
-
-describe("the default factory, until the through-the-Core mode lands (client PR 39)", () => {
-  it("says this build cannot reach the Shared folder yet: exit 3, on stderr", async () => {
-    twoCores();
-
-    const run = await cli().run(["shared", "ls"], { shared: openSharedThroughCore });
-
-    expect(run.code).toBe(EXIT_UNIMPLEMENTED);
-    expect(run.err).toEqual([
-      "actana shared ls: reaching the Shared folder through a Core is not in this build yet (actana/client PR 39)",
-    ]);
-    expect(run.out).toEqual([]);
   });
 });
 
