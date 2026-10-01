@@ -837,8 +837,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "bdcf548e3f59566a3730b7c7149851529b43fdaa8ccf3a5063d25d6261facbac",
       "category": "sdk",
-      "destSha256": "b5d4dadfe7f04d9e98cadb2dbd2b5c4883d79db5125d32947dc984629080c50e",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
+      "destSha256": "0e53c89ad02116447db3aeed44c836486c803968d5617e726c0b22bab3ea70eb",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: connect() info now reports shared: null"
     },
     {
       "sourceRepo": "actana/control",
@@ -928,8 +928,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "b778528d24f5e577cbc2f775eb562fa047f8bc6c6572ed06bbc1008e205efeec",
       "category": "sdk",
-      "destSha256": "2f7d97c3cbbf930c4b358b91278a925618453432d32bb0c3f7dac8271511e816",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
+      "destSha256": "2f113b52e97cf9f2b860d26597981d19bbeab44d798aff212a33de5dddc61e82",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: protocol version pin moved to core-link 0.19.0"
     },
     {
       "sourceRepo": "actana/control",
@@ -938,8 +938,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7224657be13600ecbff9146e552779dd5cf4b2cd90d0ebd573548ee7a378b856",
       "category": "sdk",
-      "destSha256": "736c462d6912975c16efaedd1856707f193f655589b06e9411095c4169e9eaa1",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#10 part 3: Projects removed from core-link (0.19.0) and the CLI; diverges from the Control source until actana/control#555 lands"
+      "destSha256": "948ea884e0116850260cef6aa84fde50e38bb9075d5d147b31169d4d5cc85d57",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: Shared-folder frames / ready.shared, and client#10 part 3: Projects removed \u2014 both on core-link 0.19.0; diverges until actana/control#555 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1080,8 +1080,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "56bee501097122eedb99ff66244c6f00de866aecfdf4d1e485e319799eb6dd61",
       "category": "sdk",
-      "destSha256": "2955c8280c6aaf4692606e33cb87a9524af372c07d13f560e49935dffbbeb84f",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#10 part 3: Projects removed from core-link (0.19.0) and the CLI; diverges from the Control source until actana/control#555 lands"
+      "destSha256": "bb8a8c7cb903dc56dd0e2ee05b1ccc3370af917c039f9df729bc9cd2d947efb7",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: reads ready.shared; connectionInfo().shared and sharedCapability(); client#10 part 3: Projects removed from core-link (0.19.0) and the CLI; diverges until actana/control#555 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1126,8 +1126,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c",
       "category": "sdk",
-      "destSha256": "a1eb200c434a85c07e235f2528a0329d4ab5ac2afc54efb4833f4bd9f5da53a0",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#10 part 3: Projects removed from core-link (0.19.0) and the CLI; diverges from the Control source until actana/control#555 lands"
+      "destSha256": "d3a440770c8accfe8cfb34ba72163dcb298608137ba7c65e2d7f207462b936da",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: Shared-folder frames (sharedAttach, sharedCredentials, sharedDetach, sharedStatus) and ready.shared; client#10 part 3: Projects removed from core-link \u2014 both on 0.19.0; diverges until actana/control#555 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1145,8 +1145,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "339b0eccf9c43a4c9d04c896e05f117d2d355824eacc134e81bd8f8512d7dcf6",
       "category": "sdk",
-      "destSha256": "81c8f3acff678a042867634681dbeb735a9e463f9bdbe65b77a3fff566f38405",
-      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
+      "destSha256": "9b0f19529f4d292bf333e065c1dedd75bd8578c31a8b7a488c6e7134fe51a942",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands; client#4: carries ready.shared through to the client"
     },
     {
       "sourceRepo": "actana/control",

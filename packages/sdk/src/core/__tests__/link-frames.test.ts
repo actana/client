@@ -410,14 +410,15 @@ describe("core-link-frames", () => {
     // fail a future edit that bumps the version *for the multiConnection
     // surface*, and whoever reads that failure needs the reason, not the
     // number. It did not bump for multiConnection and never will; 0.16.0 was
-    // the `exec` frame (issue 266), 0.18.0 is the stamped write (issue
-    // 289) and 0.19.0 is the Projects removal (client#10 part 3): frames rather
-    // than ready capabilities, so none of them the additive case D11 carves out.
-    it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Task-to-Session rename, and the Projects removal (client#10), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
+    // the `exec` frame (issue 266), 0.18.0 is the stamped write (issue 289),
+    // and 0.19.0 covers both the Shared-folder frames (client#4) and the
+    // Projects removal (client#10 part 3): frames rather than ready
+    // capabilities, so none of them the additive case D11 carves out.
+    it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Task-to-Session rename, the Shared-folder frames (client#4) and the Projects removal (client#10), never for multiConnection, which is a ready capability no Core is marked needs-update for (ADR 0024 D11, issue 143)", () => {
       expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.19.0");
     });
 
-    it("marks a 0.18.0 Core incompatible — the rename is a hard cut, so the gate refuses before a frame goes out", () => {
+    it("marks a 0.18.0 Core incompatible — Shared-folder frames carry a key and Projects are a hard cut, so the gate refuses before a frame goes out", () => {
       expect(coreLinkProtocolCompatible("0.18.0")).toBe(false);
       expect(coreLinkProtocolCompatible("0.19.0")).toBe(true);
     });

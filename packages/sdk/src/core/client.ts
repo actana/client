@@ -25,6 +25,7 @@ import {
   coreLinkProtocolCompatible,
   readFilesCapability,
   readMultiConnectionCapability,
+  readSharedCapability,
   type CoreLinkErrorCode,
   type CoreLinkEvent,
   type CoreLinkFilesCapability,
@@ -36,6 +37,7 @@ import {
   type CoreLinkRequestFrame,
   type CoreLinkResponseFrame,
   type CoreLinkSessionSnapshot,
+  type CoreLinkSharedCapability,
   type CoreLinkSessionTakenFrom,
   type CoreLinkSessionMutation,
   type CoreLinkSessionRow,
@@ -153,6 +155,11 @@ export type CoreConnectionInfo = {
    * registration blob that produced this connection's `wss://` url.
    */
   files: CoreLinkFilesCapability | null;
+  /**
+   * The `shared` capability, or null on a Core that cannot mount a Shared folder.
+   * Null means withhold `sharedAttach`, `sharedCredentials` and `sharedDetach`.
+   */
+  shared: CoreLinkSharedCapability | null;
   /** The `coreId` off `authOk`; null when no bearer was configured. */
   coreId: string | null;
   /** The bearer's expiry off `authOk`; null when no bearer was configured. */
@@ -346,6 +353,8 @@ export class CoreClient {
    * `true` here would send a caller at a route that is no longer there.
    */
   private files: CoreLinkFilesCapability | null = null;
+  /** This Core's `shared` capability on the *current* connection; reset like `files`. */
+  private shared: CoreLinkSharedCapability | null = null;
   private authOkFrame: CoreLinkAuthOkFrame | null = null;
 
   private readonly readyListeners = new Set<(info: CoreConnectionInfo) => void>();
@@ -457,6 +466,7 @@ export class CoreClient {
     this.ready = null;
     this.multiConnection = null;
     this.files = null;
+    this.shared = null;
     this.authOkFrame = null;
     this.established = false;
     this.transport = new CoreLinkTransport({
@@ -469,6 +479,7 @@ export class CoreClient {
           this.ready = frame;
           this.multiConnection = readMultiConnectionCapability(frame.multiConnection);
           this.files = readFilesCapability(frame.files);
+          this.shared = readSharedCapability(frame.shared);
           const info = this.connectionInfo();
           for (const cb of this.readyListeners) cb(info);
           this.maybeEstablish();
@@ -506,6 +517,7 @@ export class CoreClient {
           this.ready = null;
           this.multiConnection = null;
           this.files = null;
+          this.shared = null;
           this.authOkFrame = null;
           // Cleared here and not only on the next dial: between a socket dying
           // and a durable client's backoff opening the next one, this client is
@@ -610,6 +622,7 @@ export class CoreClient {
       compatible: coreLinkProtocolCompatible(this.ready?.version ?? null),
       multiConnection: this.multiConnection,
       files: this.files,
+      shared: this.shared,
       coreId: this.authOkFrame?.coreId ?? null,
       bearerExpiresAt: this.authOkFrame?.exp ?? null,
     };
@@ -701,6 +714,14 @@ export class CoreClient {
    */
   filesCapability(): CoreLinkFilesCapability | null {
     return this.files;
+  }
+
+  /**
+   * This connection's `shared` capability, or null. Non-null is the gate for sending
+   * the Shared-folder frames; null means the Core does not announce it.
+   */
+  sharedCapability(): CoreLinkSharedCapability | null {
+    return this.shared;
   }
 
   /**

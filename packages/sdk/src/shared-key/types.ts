@@ -1,3 +1,5 @@
+import type { CoreLinkSharedCredentials } from "../core/link-frames.ts";
+
 /** Lifetime of every issued Shared-folder key. */
 export const SHARED_KEY_LIFETIME_SECONDS = 3600;
 
@@ -8,12 +10,9 @@ export const SHARED_KEY_REFRESH_MARGIN_SECONDS = 900;
  * What a Core receives: a short-lived S3 key limited to `<prefix>/<core-id>/`.
  * It never carries the controller's master key; an issuer returns only these four fields.
  */
-export interface SharedKey {
-  readonly accessKeyId: string;
-  readonly secretAccessKey: string;
-  readonly sessionToken: string;
+export type SharedKey = Readonly<CoreLinkSharedCredentials> & {
   readonly expiresAt: Date;
-}
+};
 
 /** Controller-side: holds the master key and issues one key per Core. */
 export interface SharedKeyIssuer {

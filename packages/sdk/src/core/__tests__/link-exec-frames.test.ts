@@ -103,7 +103,7 @@ describe("output past the bound is a named refusal, not a short result", () => {
 describe("the protocol version moved for this frame", () => {
   // The reason is in the test name, so whoever reads this failing after a
   // future bump gets the reason rather than the number.
-  it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Session rename and the Projects removal (client#10), none being a ready capability (ADR 0024 D11)", () => {
+  it("is 0.19.0 — moved for `exec` (#266), the stamped write (#289), the Session rename, the Shared-folder frames (client#4) and the Projects removal (client#10), none being a ready capability (ADR 0024 D11)", () => {
     expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.19.0");
   });
 
