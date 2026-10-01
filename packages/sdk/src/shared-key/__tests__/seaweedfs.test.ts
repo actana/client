@@ -94,7 +94,7 @@ describe("createSeaweedfsKeyIssuer", () => {
       sent = form.get("WebIdentityToken")!;
       // A hostile or buggy server echoing the token back in its message.
       return new Response(
-        `<ErrorResponse><Error><Code>AccessDenied</Code><Message>bad token ${sent}</Message></Error></ErrorResponse>`,
+        `<ErrorResponse><Error><Code>AccessDenied</Code><Message>${sent} is bad</Message></Error></ErrorResponse>`,
         { status: 403 },
       );
     });
@@ -104,7 +104,10 @@ describe("createSeaweedfsKeyIssuer", () => {
     expect(text).toContain("AccessDenied");
     expect((error as SharedKeyIssueError).status).toBe(403);
     expect(sent).not.toBe("");
-    expect(text).not.toContain(sent);
+    // Not the token, nor any part of it (the message is cut at 200 chars, so check both ends).
+    expect(text).not.toContain(sent.slice(0, 60));
+    expect(text).not.toContain(sent.slice(-60));
+    expect(text).toContain("[token]");
     expect(text).not.toContain(MASTER_BODY);
     expect(text).not.toContain("PRIVATE KEY");
   });
