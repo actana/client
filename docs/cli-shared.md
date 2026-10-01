@@ -1,6 +1,6 @@
 # `actana shared`
 
-The Shared folder of a Core, from the command line (client issue 7). It lets an orchestrator send work, watch, and read reports with no `core exec`: files go in and out of the folder, and `watch` says when something changed. `actana shared --help` is the reference; this page says what the help does not.
+The Shared folder of a Core, from the command line (client issue 7; the report contract on top of it is in [report-contract.md](report-contract.md)). It lets an orchestrator send work, watch, and read reports with no `core exec`: files go in and out of the folder, and `watch` says when something changed. `actana shared --help` is the reference; this page says what the help does not.
 
 ```
 actana shared ls [<core>:][<path>]
@@ -33,4 +33,4 @@ The lines of one poll share the cursor that names the position after all of them
 
 ## Modes
 
-The command knows only the `CoreShared` interface. `src/core/shared-gateway.ts` holds the one factory (`OpenSharedFn`) that picks the mode. The through-the-Core mode is the default for a paired Core and is client PR 39, still in review; until it merges the default factory is a stub that exits 3, and the tests bind a test double. Landing PR 39 is one function body (`openSharedThroughCore`); the command does not change.
+The command knows only the `CoreShared` interface. `src/core/shared-gateway.ts` holds the one factory (`OpenSharedFn`) that picks the mode. The through-the-Core mode (client PR 39) is the default for a paired Core: `openSharedThroughCore` sends Files requests to the blob's HTTPS origin with its mTLS material and bearer, and replays the Core's `shared:changed` events for `watch`. The tests bind a test double, or inject a fake link and sender into `createOpenSharedThroughCore`.

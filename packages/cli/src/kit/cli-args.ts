@@ -75,6 +75,8 @@ export type ParsedArgs = {
   wait: boolean;
   /** `--wait-timeout <seconds>`, unparsed — the verb decides what a bad value means. */
   waitTimeout: string | null;
+  /** `--turn <n>`, unparsed: which turn's report `session send` / `session wait` means. */
+  turn: string | null;
   /** `--harness <name>`, or null to take the Project's remembered one. */
   harness: string | null;
   /** `--cwd <path>`: a directory on the **Core's** machine. */
@@ -83,6 +85,8 @@ export type ParsedArgs = {
   title: string | null;
   /** `--raw`: hand over bytes rather than a rendered screen. */
   raw: boolean;
+  /** `--no-block`: `session send` types the text as given: no report block, no turn. */
+  noBlock: boolean;
   /** `--enter`: follow sent text with a carriage return, because the operator asked. */
   enter: boolean;
   /** `--dangerously-skip-permissions`: start the harness without permission prompts. */
@@ -132,6 +136,7 @@ const VALUE_FLAGS = new Set([
   "--limit",
   "--depth",
   "--wait-timeout",
+  "--turn",
   "--harness",
   "--cwd",
   "--title",
@@ -174,6 +179,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     sha256: false,
     wait: false,
     waitTimeout: null,
+    turn: null,
     harness: null,
     cwd: null,
     title: null,
@@ -181,6 +187,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     session: null,
     label: null,
     raw: false,
+    noBlock: false,
     enter: false,
     skipPermissions: false,
     readOnly: false,
@@ -232,6 +239,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       else if (name === "--limit") parsed.limit = value;
       else if (name === "--depth") parsed.depth = value;
       else if (name === "--wait-timeout") parsed.waitTimeout = value;
+      else if (name === "--turn") parsed.turn = value;
       else if (name === "--harness") parsed.harness = value;
       else if (name === "--cwd") parsed.cwd = value;
       else if (name === "--title") parsed.title = value;
@@ -253,6 +261,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--wait":
         parsed.wait = true;
+        break;
+      case "--no-block":
+        parsed.noBlock = true;
         break;
       case "--raw":
         parsed.raw = true;
