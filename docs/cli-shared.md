@@ -17,7 +17,7 @@ actana shared watch [<core>] [--since <cursor>|start] [--limit <n>] [--json]
 
 ## Paths
 
-Relative to the Shared folder. A path ending in `/` is a folder, anything else a file. `ls` with no path lists the root. `rm` of a folder takes its contents with it; `mkdir reports` makes the folder `reports/`. Paths the `CoreShared` interface refuses (`..`, absolute, empty segments) exit 2.
+Relative to the Shared folder. A path ending in `/` is a folder, anything else a file. `ls` with no path lists the root. `rm` of a folder takes its contents with it; `mkdir reports` makes the folder `reports/`. Paths the `CoreShared` interface refuses (`..`, absolute, empty segments) exit 2, checked with the interface's own parser before any connection is made.
 
 ## Output and exit codes
 
@@ -29,7 +29,7 @@ Data on stdout; confirmations and failures on stderr; with `--json`, one documen
 
 `watch` polls `CoreShared.watch(since)`. With no `--since` it starts from now, like `tail -f`; `--since start` prints everything. A change is one line, `path  kind  size  time` or `path  deleted`. With `--json` it is one object per line: `path`, `kind`, `deleted`, `size` and `modifiedAt` where present, and `cursor`.
 
-The lines of one poll share the cursor that names the position after all of them. Resume with `--since <cursor>` only once every line carrying that cursor has been handled. A failure stops the command and prints `Resume with --since <cursor>` on stderr. Folder changes are hints: the interface only promises every file change.
+The lines of one poll share the cursor that names the position after all of them. Resume with `--since <cursor>` only once every line carrying that cursor has been handled. `--limit n` stops after the poll that holds the nth change and prints all of that poll, so the cursor on its lines never skips a change. A failure stops the command and prints `Resume with --since <cursor>` on stderr. Folder changes are hints: the interface only promises every file change.
 
 ## Modes
 

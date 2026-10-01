@@ -28,7 +28,7 @@
 // was wrong, which includes a path the interface refuses).
 
 import * as fs from "node:fs";
-import { CoreSharedError, CoreSharedPartialError } from "@actana/sdk/shared";
+import { CoreSharedError, CoreSharedPartialError, parseSharedPath } from "@actana/sdk/shared";
 import type { SharedChange, SharedCursor, SharedEntry } from "@actana/sdk/shared";
 import { errorText } from "./core-connection.ts";
 import { resolveCore } from "./core-resolution.ts";
@@ -70,7 +70,8 @@ Flags
   --json           machine-readable output
   --since <cursor> watch: carry on after this cursor. --since start prints
                    everything; with no --since, watch starts from now.
-  --limit <n>      watch: stop after n changes instead of following
+  --limit <n>      watch: stop after the poll that holds the nth change (all of it is
+                   printed, so a cursor never skips a change) instead of following
   --verbose        explain the steps, on stderr. Never prints a blob.
 
 Watch
@@ -131,6 +132,21 @@ function parseTarget(raw: string): Target {
   if (prefix === "") return { core: null, path: raw.slice(1) };
   if (coreNameError(prefix) !== null) return { core: null, path: raw };
   return { core: prefix, path: raw.slice(colon + 1) };
+}
+
+/**
+ * Why the interface would refuse this path (`..`, absolute, an empty segment, a
+ * control character), or null. Asked here, with the other checks that never dial,
+ * by the interface's own parser: a path that cannot be right should not cost a
+ * connection, and should not depend on which mode is bound.
+ */
+function pathError(path: string): string | null {
+  try {
+    parseSharedPath(path);
+    return null;
+  } catch (err) {
+    return errorText(err);
+  }
 }
 
 /** The Core a target means: its prefix, or `--core`; both, and they have to agree. */
@@ -212,6 +228,8 @@ async function sharedLs(deps: ClientDeps, args: ParsedArgs, paths: RegistryPaths
   const target = parseTarget(rest[0] ?? "");
   const core = coreFor(args, target);
   if (!core.ok) return usage(deps, "ls", core.error.replace(/\.$/, ""));
+  const refused = pathError(target.path);
+  if (refused !== null) return usage(deps, "ls", refused);
 
   return withShared(deps, args, paths, "ls", core.core, async ({ shared }) => {
     const rows = await shared.list(target.path);
@@ -265,6 +283,8 @@ function oneTarget(
   const target = parseTarget(raw);
   const core = coreFor(args, target);
   if (!core.ok) return { ok: false, message: core.error.replace(/\.$/, "") };
+  const refused = pathError(target.path);
+  if (refused !== null) return { ok: false, message: refused };
   return { ok: true, target, core: core.core, extra };
 }
 
@@ -453,8 +473,11 @@ async function sharedWatch(deps: ClientDeps, args: ParsedArgs, paths: RegistryPa
       for (const change of result.changes) {
         deps.out(args.json ? changeDocument(change, result.cursor) : changeLine(change));
         printed += 1;
-        if (limit !== null && printed >= limit) return EXIT_OK;
       }
+      // The poll that reaches the limit is printed whole. Every line of a poll
+      // carries the cursor for the position after all of it, so stopping part-way
+      // would hand out a cursor that skips the changes not yet printed.
+      if (limit !== null && printed >= limit) return EXIT_OK;
       cursor = result.cursor;
       await new Promise<void>((resolve) => setTimeout(resolve, interval));
     }

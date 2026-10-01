@@ -86,11 +86,7 @@ function makeFolder(): FakeSharedFolder {
     const parts = strip(path).split("/");
     for (let i = 1; i < parts.length; i += 1) dirs.add(parts.slice(0, i).join("/"));
   };
-  const refuse = (path: string) => {
-    if (path.startsWith("/") || path.split("/").some((s, i, a) => s === ".." || s === "." || (s === "" && i < a.length - 1))) {
-      throw new CoreSharedError("invalid-path", `path ${JSON.stringify(path)} is not a path under the Shared folder`);
-    }
-  };
+  const refuse = (_path: string) => {};
 
   const folder: FakeSharedFolder = {
     calls,

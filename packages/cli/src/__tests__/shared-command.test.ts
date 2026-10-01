@@ -219,15 +219,16 @@ describe("actana shared put", () => {
     expect(shared.opened).toEqual([]);
   });
 
-  it("refuses a path that escapes the folder: exit 2, on stderr, and the folder is untouched", async () => {
+  it("refuses a path that escapes the folder: exit 2, on stderr, before anything is opened", async () => {
     twoCores();
     const shared = fakeShared();
 
     const run = await cli().run(["shared", "put", "../etc/x", "-"], { shared: shared.open, stdin: "x" });
 
     expect(run.code).toBe(EXIT_USAGE);
-    expect(run.err[0]).toContain("actana shared put:");
-    expect(shared.folder(PROD).text("../etc/x")).toBeUndefined();
+    expect(run.err).toEqual(['actana shared put: path may not contain "." or "..".']);
+    expect(shared.opened).toEqual([]);
+    expect(shared.folder(PROD).calls).toEqual([]);
   });
 });
 
@@ -557,5 +558,48 @@ describe("the default factory, until the through-the-Core mode lands (client PR 
       "actana shared ls: reaching the Shared folder through a Core is not in this build yet (actana/client PR 39)",
     ]);
     expect(run.out).toEqual([]);
+  });
+});
+
+describe("a path the interface refuses never reaches a mode", () => {
+  const bad = ["../x", "/abs", "a//b", "a/./b", "a\\b"];
+  const verbs: string[][] = [["ls"], ["get"], ["put"], ["rm"], ["mkdir"]];
+
+  it("exits 2 on stderr for every verb, with the default factory too, and opens nothing", async () => {
+    twoCores();
+    const shared = fakeShared();
+    for (const verb of verbs) {
+      for (const path of bad) {
+        for (const factory of [shared.open, openSharedThroughCore]) {
+          const run = await cli().run(["shared", ...verb, `staging:${path}`], { shared: factory, stdin: "x" });
+          expect(run.code, `${verb[0]} ${path}`).toBe(EXIT_USAGE);
+          expect(run.err[0], `${verb[0]} ${path}`).toMatch(new RegExp(`^actana shared ${verb[0]}: `));
+          expect(run.out).toEqual([]);
+        }
+      }
+    }
+    expect(shared.opened).toEqual([]);
+  });
+});
+
+describe("actana shared watch --limit and --since", () => {
+  it("prints the whole poll that reaches the limit, so the cursor it printed skips nothing", async () => {
+    twoCores();
+    const shared = fakeShared({ pollIntervalMs: 1 });
+    const folder = shared.folder(PROD);
+    await folder.put("r1.md", "1");
+    await folder.put("r2.md", "2");
+    await folder.put("r3.md", "3");
+
+    const first = await cli().run(["shared", "watch", "--since", "0", "--json", "--limit", "1"], { shared: shared.open });
+
+    expect(first.code).toBe(EXIT_OK);
+    const lines = first.out.map((line) => JSON.parse(line));
+    expect(lines.map((l) => l.path)).toEqual(["r1.md", "r2.md", "r3.md"]);
+
+    // Resuming from that cursor loses nothing and repeats nothing.
+    await folder.put("r4.md", "4");
+    const resumed = await cli().run(["shared", "watch", "--since", lines[0].cursor, "--json", "--limit", "1"], { shared: shared.open });
+    expect(resumed.out.map((line) => JSON.parse(line).path)).toEqual(["r4.md"]);
   });
 });
