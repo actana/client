@@ -26,8 +26,6 @@ import type {
 import { PtyCoreLinkServer } from "@actana/core/pty-core-link-server";
 import type { PtyCore, PtyCoreEvent } from "@actana/core/pty-manager";
 import type {
-  CoreLinkProjectMutation,
-  CoreLinkProjectSnapshot,
   CoreLinkSessionSnapshot,
   CoreLinkSessionMutation,
   CoreLinkSessionRow,
@@ -57,8 +55,6 @@ import { CORE_LINK_PROTOCOL_VERSION } from "../link-frames.ts";
 
 const ESC = "\u001B";
 const CSI = `${ESC}[`;
-const PROJECT_ID = "p-1";
-
 /**
  * The Core's session store, in memory: create a row, patch its status, list the
  * Sessions — and append the event a patch produces, because that event is the
@@ -71,18 +67,15 @@ class FakeSessionStore implements CoreMutationPort {
 
   constructor(private readonly eventLog: FakeEventLog) {}
 
-  mutateProject(mutation: CoreLinkProjectMutation): CoreLinkProjectSnapshot | null {
-    void mutation;
+  mutateProject(_mutation: unknown): null {
     return null;
   }
 
   mutateSession(mutation: CoreLinkSessionMutation): CoreLinkSessionRow | null {
     if (mutation.op === "create") {
-      if (mutation.projectId !== PROJECT_ID) return null;
       const sessionId = mutation.sessionId ?? `t-${++this.seq}`;
       const row: CoreLinkSessionRow = {
         sessionId,
-        projectId: mutation.projectId,
         title: mutation.title,
         titleManuallySet: false,
         claudeSessionId: null,
@@ -281,8 +274,6 @@ async function startSession(
 ): Promise<CoreSession> {
   await r.client.connect();
   return CoreSession.start(r.client, {
-    projectId: PROJECT_ID,
-    cwd: "/home/op/projects/thing",
     harness: "claude-code",
     prompt: "summarise this repo",
     cols: 40,
@@ -300,7 +291,6 @@ describe("CoreSession.start", () => {
     const spawn = vi.mocked(rig.ptyCore.spawn).mock.calls[0]?.[0];
     expect(spawn).toMatchObject({
       sessionId: session.sessionId,
-      cwd: "/home/op/projects/thing",
       command: HARNESS_LAUNCH_COMMANDS["claude-code"],
       agent: "claude-code",
       cols: 40,
@@ -319,7 +309,7 @@ describe("CoreSession.start", () => {
 
     const spawn = vi.mocked(rig.ptyCore.spawn).mock.calls[0]?.[0] as Record<string, unknown>;
     expect(Object.keys(spawn).sort()).toEqual(
-      ["agent", "cols", "command", "cwd", "initialInput", "rows", "sessionId"].sort(),
+      ["agent", "cols", "command", "initialInput", "rows", "sessionId"].sort(),
     );
   });
 
@@ -373,12 +363,11 @@ describe("CoreSession.start", () => {
     await rig.client.connect();
     const created = await rig.client.sessionsMutate({
       op: "create",
-      projectId: PROJECT_ID,
-      title: "mine",
+            title: "mine",
       agent: "claude-code",
     });
 
-    session = await startSession(rig, { projectId: undefined, sessionId: created!.sessionId });
+    session = await startSession(rig, { sessionId: created!.sessionId });
 
     expect(session.sessionId).toBe(created!.sessionId);
     expect(rig.store.rows.size).toBe(1);
@@ -393,30 +382,28 @@ describe("CoreSession.start", () => {
     expect(spawn.dangerouslySkipPermissions).toBe(true);
   });
 
-  it("refuses to start without a Project or a Session to start against", async () => {
+  it("creates a Session row when no sessionId is given", async () => {
     rig = startRig();
-    await rig.client.connect();
+    session = await startSession(rig);
 
-    await expect(
-      CoreSession.start(rig.client, { cwd: "/x", harness: "claude-code" }),
-    ).rejects.toBeInstanceOf(CoreSessionStartError);
+    expect(rig.store.rows.size).toBe(1);
+    expect(session.sessionId).toBe([...rig.store.rows.keys()][0]);
   });
 
   it("surfaces the Core's rejection rather than pre-empting it", async () => {
-    // The working-directory check, the argv[0] check and the flag allow-list are
-    // the Core's: they read a database and a filesystem this process is not on.
-    // What this asserts is that the spawn was *attempted* and the Core's own
-    // reason came back — a client that had refused locally would never have
-    // reached the server, and would be guessing.
+    // The argv[0] check and the flag allow-list are the Core's: they read a
+    // filesystem this process is not on. What this asserts is that the spawn was
+    // *attempted* and the Core's own reason came back — a client that had refused
+    // locally would never have reached the server, and would be guessing.
     rig = startRig({
       spawn: vi.fn(async () => {
-        throw new Error("pty:spawn rejected (cwd-outside-project-roots)");
+        throw new Error("pty:spawn rejected (command-not-allowlisted)");
       }) as unknown as PtyCore["spawn"],
     });
 
-    const start = startSession(rig, { cwd: "/etc" });
+    const start = startSession(rig);
 
-    await expect(start).rejects.toThrow(/cwd-outside-project-roots/);
+    await expect(start).rejects.toThrow(/command-not-allowlisted/);
     await expect(start).rejects.toBeInstanceOf(CoreSessionStartError);
     expect(rig.ptyCore.spawn).toHaveBeenCalledTimes(1);
   });
@@ -612,13 +599,12 @@ describe("waiting on the Core's report", () => {
     await rig.client.connect();
     const created = await rig.client.sessionsMutate({
       op: "create",
-      projectId: PROJECT_ID,
-      title: "old",
+            title: "old",
       agent: "claude-code",
     });
     rig.store.setStatus(created!.sessionId, "finished");
 
-    session = await startSession(rig, { projectId: undefined, sessionId: created!.sessionId });
+    session = await startSession(rig, { sessionId: created!.sessionId });
     let settled = false;
     void session.waitForIdle().then(() => {
       settled = true;
@@ -752,8 +738,7 @@ describe("attaching to a Session that is already running (#289)", () => {
     await r.client.connect();
     const created = await r.client.sessionsMutate({
       op: "create",
-      projectId: PROJECT_ID,
-      title: "somebody else's session",
+            title: "somebody else's session",
       agent: "claude-code",
     });
     r.store.setStatus(created!.sessionId, status);
@@ -853,8 +838,7 @@ describe("attaching to a Session that is already running (#289)", () => {
     await r.client.connect();
     const created = await r.client.sessionsMutate({
       op: "create",
-      projectId: PROJECT_ID,
-      title: "a codex session",
+            title: "a codex session",
       agent: "codex",
     });
     const sessionId = created!.sessionId;
@@ -1108,8 +1092,7 @@ describe("a wait cannot outlive its link (#396)", () => {
     await r.client.connect();
     const created = await r.client.sessionsMutate({
       op: "create",
-      projectId: PROJECT_ID,
-      title: "somebody else's session",
+            title: "somebody else's session",
       agent: "claude-code",
     });
     r.store.setStatus(created!.sessionId, status);

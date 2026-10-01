@@ -31,8 +31,6 @@ import {
   type CoreLinkHarnessAvailabilityMap,
   type CoreLinkLaunchProcessKillResult,
   type CoreLinkMultiConnectionCapability,
-  type CoreLinkProjectMutation,
-  type CoreLinkProjectSnapshot,
   type CoreLinkPtyReplay,
   type CoreLinkPtySpawnOptions,
   type CoreLinkRequestFrame,
@@ -1344,49 +1342,26 @@ export class CoreClient {
   }
 
   /**
-   * List every project on this Core as a live snapshot. The Core is the source of
-   * truth; a client holds none. The returned `path` is a machine path on the
-   * Core — only the Core can validate it.
-   */
-  projectsList(): Promise<CoreLinkProjectSnapshot[]> {
-    return this.rpc({ type: "projectsList", reqId: "" }) as Promise<CoreLinkProjectSnapshot[]>;
-  }
-
-  /**
-   * List every active (non-archived) session on this Core, optionally filtered to
-   * one project.
+   * List every active (non-archived) session on this Core.
    *
    * `archivedCount` is how many archived rows the same scope holds — a scalar,
    * never the rows (ADR 0019). Use {@link archivedSessionRowsList} for those.
    */
-  sessionRowsList(projectId?: string): Promise<{ sessions: CoreLinkSessionRow[]; archivedCount: number }> {
-    return this.rpc({ type: "sessionRowsList", reqId: "", projectId }) as Promise<{
+  sessionRowsList(): Promise<{ sessions: CoreLinkSessionRow[]; archivedCount: number }> {
+    return this.rpc({ type: "sessionRowsList", reqId: "" }) as Promise<{
       sessions: CoreLinkSessionRow[];
       archivedCount: number;
     }>;
   }
 
   /**
-   * List every archived session on this Core, optionally filtered to one project
-   * (ADR 0019) — a separate frame from {@link sessionRowsList}, so an active answer
-   * stays free of archived rows by construction rather than by what a caller
-   * remembers to pass.
+   * List every archived session on this Core (ADR 0019) — a separate frame from
+   * {@link sessionRowsList}, so an active answer stays free of archived rows by
+   * construction rather than by what a caller remembers to pass.
    */
-  archivedSessionRowsList(projectId?: string): Promise<CoreLinkSessionRow[]> {
-    return this.rpc({ type: "archivedSessionRowsList", reqId: "", projectId }) as Promise<
+  archivedSessionRowsList(): Promise<CoreLinkSessionRow[]> {
+    return this.rpc({ type: "archivedSessionRowsList", reqId: "" }) as Promise<
       CoreLinkSessionRow[]
-    >;
-  }
-
-  /**
-   * Create / rename / archive a project on this Core. The Core validates the
-   * machine path server-side; an invalid path comes back as an `error` frame that
-   * rejects this promise. Returns `null` when a `rename`/`archive` targets a
-   * missing row.
-   */
-  projectsMutate(mutation: CoreLinkProjectMutation): Promise<CoreLinkProjectSnapshot | null> {
-    return this.rpc({ type: "projectsMutate", reqId: "", mutation }) as Promise<
-      CoreLinkProjectSnapshot | null
     >;
   }
 
@@ -1398,12 +1373,12 @@ export class CoreClient {
   }
 
   /**
-   * List every active session on this Core (optionally filtered to one project).
-   * A session's `ptyId` is set when the Core has a live PTY for that session — which
-   * is how a client knows what it can reattach to.
+   * List every active session on this Core. A session's `ptyId` is set when the
+   * Core has a live PTY for that session — which is how a client knows what it
+   * can reattach to.
    */
-  sessionsList(projectId?: string): Promise<CoreLinkSessionSnapshot[]> {
-    return this.rpc({ type: "sessionsList", reqId: "", projectId }) as Promise<
+  sessionsList(): Promise<CoreLinkSessionSnapshot[]> {
+    return this.rpc({ type: "sessionsList", reqId: "" }) as Promise<
       CoreLinkSessionSnapshot[]
     >;
   }
@@ -1512,12 +1487,8 @@ export function unwrapResponse(msg: CoreLinkResponseFrame): unknown {
       return { sessions: msg.sessions, archivedCount: msg.archivedCount };
     case "archivedSessionRowsListResult":
       return msg.sessions;
-    case "projectsListResult":
-      return msg.projects;
     case "sessionsMutateResult":
       return msg.session;
-    case "projectsMutateResult":
-      return msg.project;
     case "sessionsListResult":
       return msg.sessions;
     case "agentsAvailabilityListResult":
