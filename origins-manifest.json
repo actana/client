@@ -329,7 +329,9 @@
       "destPath": "packages/cli/src/__tests__/skill-verbs-exist.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "465afd075b453887b58eda8a127613cd56fdc2c8ab3d43db6142fee72f75b58b",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "55cd5fed82205b38794632b755199a29fd5d25aafaa50b3f2cfb6ac1a69c708c",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1124,7 +1126,7 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c",
       "category": "sdk",
-      "destSha256": "68941c9dde91cff50807fa80c955b94090444f26d3b5483584f06c3e0e094e10",
+      "destSha256": "c4486ff92d535b88248153df026b9d58bec5f9abb148325b57a1dfc017f2a0bb",
       "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {

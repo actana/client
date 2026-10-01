@@ -1403,6 +1403,8 @@ export type CoreLinkServerFrame =
 
 /**
  * Protocol version advertised in the `ready` frame. Bumped on breaking changes.
+ * The history below uses the post-0.18.0 names (`session*` frames, `session:*` events) even for
+ * versions that predate the Task-to-Session rename; at those versions the frames carried Task names.
  * Issue 02 adds the event-cursor replay (`subscribe` / `event` /
  * `eventsReplayed`) and the session/hook op frames → 0.2.0. Issue 04 adds
  * the mTLS bearer `auth` / `authOk` / `authError` frames → 0.3.0. Issue 06 adds
