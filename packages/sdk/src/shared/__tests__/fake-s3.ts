@@ -1,5 +1,11 @@
 // A small in-memory S3 for fast local runs of the contract suite: path-style, single bucket,
 // object PUT/GET/HEAD/DELETE, server-side copy and ListObjectsV2 (prefix, delimiter, paging).
+//
+// Two behaviours, because the two stores the S3 mode meets differ where it matters:
+//  - flat (S3 proper): a folder is only a key prefix; delete the last file and the folder is gone.
+//  - directories (SeaweedFS, measured in CI): a folder is a directory that outlives its last file
+//    (a delimiter listing keeps showing it), a key ending in `/` cannot be copied (404), and a
+//    DELETE of `dir/` removes it only when it is empty (otherwise it is a quiet no-op).
 // It only checks that a signed request with a session token arrives; the signature itself is
 // checked by sigv4.test.ts against AWS's published vectors and, for real, by SeaweedFS in CI.
 import { createHash } from "node:crypto";
@@ -23,11 +29,17 @@ export interface FakeS3 {
   close(): Promise<void>;
 }
 
-export async function startFakeS3(options: { bucket?: string; pageSize?: number } = {}): Promise<FakeS3> {
+export async function startFakeS3(options: { bucket?: string; pageSize?: number; directories?: boolean } = {}): Promise<FakeS3> {
   const bucket = options.bucket ?? "actana-shared";
   const pageSize = options.pageSize ?? 1000;
   const objects = new Map<string, StoredObject>();
   const requests: string[] = [];
+  const directories = options.directories === true;
+  /** Directory keys (`a/`, `a/b/`) the store keeps; only in directories mode. */
+  const dirs = new Set<string>();
+  const addDirs = (key: string): void => {
+    for (let i = key.indexOf("/"); i !== -1; i = key.indexOf("/", i + 1)) dirs.add(key.slice(0, i + 1));
+  };
 
   const reply = (res: ServerResponse, status: number, body = "", headers: Record<string, string> = {}): void => {
     res.writeHead(status, { "content-type": "application/xml", ...headers });
@@ -57,7 +69,9 @@ export async function startFakeS3(options: { bucket?: string; pageSize?: number 
       const prefix = query.get("prefix") ?? "";
       const delimiter = query.get("delimiter") ?? "";
       const after = query.get("continuation-token") ?? "";
-      const keys = [...objects.keys()].filter((k) => k.startsWith(prefix) && k > after).sort();
+      const candidates = new Set(objects.keys());
+      if (directories && delimiter) for (const d of dirs) if (d !== prefix) candidates.add(d);
+      const keys = [...candidates].filter((k) => k.startsWith(prefix) && k > after).sort();
       const contents: string[] = [];
       const prefixes = new Set<string>();
       let count = 0;
@@ -79,7 +93,8 @@ export async function startFakeS3(options: { bucket?: string; pageSize?: number 
         last = k;
         if (common !== undefined) prefixes.add(common);
         else {
-          const o = objects.get(k) as StoredObject;
+          const o = objects.get(k);
+          if (!o) continue;
           contents.push(
             `<Contents><Key>${xmlEscape(k)}</Key><LastModified>${o.modified.toISOString()}</LastModified><ETag>"${o.etag}"</ETag><Size>${o.body.length}</Size></Contents>`,
           );
@@ -100,18 +115,25 @@ export async function startFakeS3(options: { bucket?: string; pageSize?: number 
       if (typeof source === "string") {
         const from = decodeURIComponent(source).replace(/^\//, "").split("/").slice(1).join("/");
         const found = objects.get(from);
-        if (!found) return error(res, 404, "NoSuchKey");
+        if (!found || (directories && from.endsWith("/"))) return error(res, 404, "NoSuchKey");
         data = found.body;
       }
       const etag = createHash("md5").update(data).digest("hex");
       objects.set(key, { body: data, modified: new Date(Math.floor(Date.now() / 1000) * 1000), etag });
+      if (directories) addDirs(key);
       return typeof source === "string"
         ? reply(res, 200, `<?xml version="1.0"?><CopyObjectResult><ETag>"${etag}"</ETag></CopyObjectResult>`)
         : reply(res, 200, "", { etag: `"${etag}"` });
     }
     const found = objects.get(key);
     if (req.method === "DELETE") {
-      objects.delete(key);
+      if (directories && key.endsWith("/")) {
+        const occupied = [...objects.keys(), ...dirs].some((k) => k !== key && k.startsWith(key));
+        if (!occupied) {
+          objects.delete(key);
+          dirs.delete(key);
+        }
+      } else objects.delete(key);
       return reply(res, 204);
     }
     if (!found) return error(res, 404, "NoSuchKey");

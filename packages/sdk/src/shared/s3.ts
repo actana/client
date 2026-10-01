@@ -167,6 +167,24 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
     return all;
   }
 
+  /**
+   * What deleting a folder deletes, in order: its files, then its directory keys, deepest first.
+   * The directory keys are the folder markers the listing shows PLUS every ancestor directory of
+   * every key down to the folder itself: SeaweedFS keeps a directory after its last file is deleted
+   * (a delimiter listing still shows it), and a DELETE on `dir/` removes an empty one, does nothing
+   * to one that still has something in it, and on S3 proper is a delete of a key that is not there.
+   */
+  function deletionOrder(folderKey: string, keys: readonly string[]): string[] {
+    const dirs = new Set<string>([folderKey]);
+    const files: string[] = [];
+    for (const key of keys) {
+      if (key.endsWith("/")) dirs.add(key);
+      else files.push(key);
+      for (let i = key.indexOf("/", folderKey.length); i !== -1; i = key.indexOf("/", i + 1)) dirs.add(key.slice(0, i + 1));
+    }
+    return [...files, ...[...dirs].sort().reverse()];
+  }
+
   async function exists(key: string): Promise<boolean> {
     try {
       await send("HEAD", key);
@@ -193,6 +211,11 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
 
   /** Server-side copy; S3 can answer 200 and still carry an error in the body. */
   async function copyKey(from: string, to: string): Promise<void> {
+    if (from.endsWith("/")) {
+      // SeaweedFS keeps a folder marker as a directory and refuses to copy it, so it is made again.
+      await send("PUT", to, { body: "", unsigned: { "content-type": MARKER_TYPE } });
+      return;
+    }
     const reply = await send("PUT", to, { headers: { "x-amz-copy-source": keyPath(from) } });
     if (/<Error>/.test(new TextDecoder().decode(reply.bytes))) throw unavailable("copy");
   }
@@ -264,14 +287,14 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
       }
       const keys = (await allKeys(folderPrefix(parsed.relative))).map((o) => o.key);
       if (keys.length === 0) throw new CoreSharedError("not-found", "not found", { status: 404 });
-      // Contents first, the folder's own marker last: a stop part-way leaves the folder still there.
-      const marker = folderPrefix(parsed.relative);
-      await deleteKeys([...keys.filter((k) => k !== marker), ...keys.filter((k) => k === marker)]);
+      // Files first, then directories deepest first, the folder itself last: a stop part-way leaves the folder there.
+      await deleteKeys(deletionOrder(folderPrefix(parsed.relative), keys));
     },
     // S3 has no rename, so a move is copy, then delete. The destination is complete before the first
     // source is deleted. A failed COPY is rolled back (the source was never touched), so it changes
     // nothing unless the rollback fails too; a failed DELETE leaves the source part-there and the
     // destination complete: both are reported by a CoreSharedPartialError listing what is left.
+    // Files go first and directories after, deepest first, in both phases (see deletionOrder).
     async move(from, to): Promise<void> {
       const src = parseSharedPath(from, "from");
       const dst = parseSharedPath(to, "to");
@@ -279,11 +302,13 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
       if (src.folder !== dst.folder) throw new CoreSharedError("invalid-path", "from and to must both name files or both name folders (a folder ends in /)");
 
       let pairs: { from: string; to: string }[];
+      let removals: string[];
       if (!src.folder) {
         const fromKey = fileKey(src.relative);
         if (!(await exists(fromKey))) throw new CoreSharedError("not-found", "not found", { status: 404 });
         if (await exists(fileKey(dst.relative))) throw new CoreSharedError("exists", "the destination is taken");
         pairs = [{ from: fromKey, to: fileKey(dst.relative) }];
+        removals = [fromKey];
       } else {
         const fromPrefix = folderPrefix(src.relative);
         const toPrefix = folderPrefix(dst.relative);
@@ -291,9 +316,9 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
         const keys = (await allKeys(fromPrefix)).map((o) => o.key);
         if (keys.length === 0) throw new CoreSharedError("not-found", "not found", { status: 404 });
         if (await anyUnder(toPrefix)) throw new CoreSharedError("exists", "the destination is taken");
-        // Contents first, the folder's own marker last, in both phases.
-        keys.sort((a, b) => Number(a === fromPrefix) - Number(b === fromPrefix) || (a < b ? -1 : 1));
+        // Copy what is there (files and the folder markers the listing shows); delete in deletionOrder.
         pairs = keys.map((key) => ({ from: key, to: toPrefix + key.slice(fromPrefix.length) }));
+        removals = deletionOrder(fromPrefix, keys);
       }
 
       const copied: string[] = [];
@@ -315,7 +340,7 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
           throw new CoreSharedPartialError("move", "copy", stuck.map(relativeOf), error);
         }
       }
-      const sources = pairs.map((pair) => pair.from);
+      const sources = removals;
       for (let i = 0; i < sources.length; i += 1) {
         try {
           await send("DELETE", sources[i] as string);

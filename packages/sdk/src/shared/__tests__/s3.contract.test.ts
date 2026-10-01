@@ -6,25 +6,28 @@ import { expectCode, runCoreSharedContract } from "./contract.ts";
 import { startFakeS3 } from "./fake-s3.ts";
 import { seaweedfsEnv, seaweedfsHarness } from "./seaweedfs-harness.ts";
 
-runCoreSharedContract("S3 mode on an in-memory S3", async () => {
-  const s3 = await startFakeS3();
-  const key = {
-    accessKeyId: "AKIAFAKE",
-    secretAccessKey: "secret",
-    sessionToken: "token",
-    expiresAt: new Date(Date.now() + 3600_000),
-  };
-  return {
-    shared: createS3CoreShared({
-      endpoint: s3.endpoint,
-      bucket: s3.bucket,
-      prefix: "cores/core-a",
-      listPageSize: 5,
-      credentials: { get: async () => key },
-    }),
-    dispose: () => s3.close(),
-  };
-});
+// Two in-memory stores: flat like S3 proper, and with directories like SeaweedFS (see fake-s3.ts).
+for (const directories of [false, true]) {
+  runCoreSharedContract(`S3 mode on an in-memory S3 (${directories ? "directories, like SeaweedFS" : "flat, like S3"})`, async () => {
+    const s3 = await startFakeS3({ directories });
+    const key = {
+      accessKeyId: "AKIAFAKE",
+      secretAccessKey: "secret",
+      sessionToken: "token",
+      expiresAt: new Date(Date.now() + 3600_000),
+    };
+    return {
+      shared: createS3CoreShared({
+        endpoint: s3.endpoint,
+        bucket: s3.bucket,
+        prefix: "cores/core-a",
+        listPageSize: 5,
+        credentials: { get: async () => key },
+      }),
+      dispose: () => s3.close(),
+    };
+  });
+}
 
 const seaweed = seaweedfsHarness();
 if (seaweed) {
