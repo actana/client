@@ -64,6 +64,9 @@ function baseDeps(f: CliFixture, argv: string[], out: string[], err: string[]): 
     openShared: async () => {
       throw new Error("unexpected shared");
     },
+    openFiles: async () => {
+      throw new Error("unexpected files");
+    },
     hostname: "vm-1",
     platform: "linux",
     interactive: false,
