@@ -44,6 +44,7 @@ describe("SDK export isolation", () => {
     expect(Object.keys(exportsMap).sort()).toEqual(
       [
         "./core",
+        "./core/link-frames",
         "./pairing",
         "./pairing/server",
         "./pairing/stores/json-file",
@@ -96,6 +97,10 @@ describe("SDK export isolation", () => {
     expect(loaded).not.toContain("pg");
   });
 
+  it("importing ./core/link-frames loads none of ws, undici, zod or pg", () => {
+    expect(depNames(probeExport("./core/link-frames"))).toEqual([]);
+  });
+
   it("importing ./search does not load ws", () => {
     const loaded = depNames(probeExport("./search"));
     expect(loaded).not.toContain("ws");
@@ -107,6 +112,7 @@ describe("SDK export isolation", () => {
       "./pairing/server",
       "./pairing/stores/json-file",
       "./core",
+      "./core/link-frames",
       "./search",
     ];
     for (const subpath of publicExports) {

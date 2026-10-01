@@ -2,8 +2,8 @@ import { defineConfig } from "vitest/config";
 import path from "node:path";
 
 const sdkSrc = path.resolve(import.meta.dirname, "src");
-// Pinned Control sources for test-only @actana/core and @actana/shared aliases (d7eeb65).
-const controlPinSrc = path.resolve(import.meta.dirname, "../../.vendor/control-d7eeb65/src");
+// Pinned Control sources for test-only @actana/core and @actana/shared aliases (aa03266, unmerged control draft PR 598).
+const controlPinSrc = path.resolve(import.meta.dirname, "../../.vendor/control-aa03266/src");
 
 export default defineConfig({
   test: {
@@ -23,6 +23,7 @@ export default defineConfig({
       },
       { find: /^@actana\/sdk\/pairing$/, replacement: path.join(sdkSrc, "pairing.ts") },
       { find: /^@actana\/sdk\/core$/, replacement: path.join(sdkSrc, "core.ts") },
+      { find: /^@actana\/sdk\/core\/link-frames$/, replacement: path.join(sdkSrc, "core/browser.ts") },
       { find: /^@actana\/sdk\/search$/, replacement: path.join(sdkSrc, "search.ts") },
       // Control's Core imports the SDK by its old flat paths; map them to /core.
       { find: /^@actana\/sdk\/core-link-frames$/, replacement: path.join(sdkSrc, "core/link-frames.ts") },

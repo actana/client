@@ -40,7 +40,7 @@
 // prose out of a stream it is trying to parse.
 //
 // One more, which falls out of the last: **without `--json`, stdout carries the
-// Session id and nothing else.** `TASK=$(actana session start web "fix it")` is
+// Session id and nothing else.** `SESSION=$(actana session start web "fix it")` is
 // the shape of every script that will ever use this, and it works with `--wait`
 // as well as without it because the settled status goes to stderr too.
 
@@ -267,8 +267,8 @@ async function sessionResume(
   const misused = misusedFlag(args, ["--wait", "--wait-timeout", "--dangerously-skip-permissions"]);
   if (misused) return usage(deps, "resume", misused);
 
-  const [taskId, ...promptWords] = rest;
-  if (taskId === undefined) {
+  const [sessionId, ...promptWords] = rest;
+  if (sessionId === undefined) {
     return usage(deps, "resume", "a session id is required — `actana session resume <session> [prompt]`");
   }
 
@@ -279,9 +279,9 @@ async function sessionResume(
   if (prompt.error) return usage(deps, "resume", prompt.error);
 
   return withGateway(deps, args, paths, "resume", async (gateway) => {
-    deps.verbose(`resuming session ${taskId}`);
+    deps.verbose(`resuming session ${sessionId}`);
     const session = await gateway.resume({
-      taskId,
+      sessionId,
       ...(prompt.text === null ? {} : { prompt: prompt.text }),
       dangerouslySkipPermissions: args.skipPermissions,
     });
@@ -301,7 +301,7 @@ async function reportStartedSession(
 ): Promise<number> {
   try {
     const where = session.project ?? session.projectId;
-    deps.err(`Started ${session.harness} in ${where} — session ${session.taskId}, pty ${session.ptyId}.`);
+    deps.err(`Started ${session.harness} in ${where} — session ${session.sessionId}, pty ${session.ptyId}.`);
     deps.verbose(`command: ${session.command}`);
     // Issue 177 finding 4, said out loud rather than left to be discovered.
     // Not `verbose`: an operator who has to know this is precisely one who has
@@ -321,7 +321,7 @@ async function reportStartedSession(
       if (args.json) {
         deps.out(formatJson({ ...startedFields(session), waited: false }));
       } else {
-        deps.out(session.taskId);
+        deps.out(session.sessionId);
       }
       return EXIT_OK;
     }
@@ -383,9 +383,9 @@ async function awaitTurn(
       }),
     );
   } else {
-    deps.out(session.taskId);
+    deps.out(session.sessionId);
     deps.err(settledLine(outcome));
-    deps.err(`\`actana session logs ${session.taskId}\` prints the transcript while the harness is running.`);
+    deps.err(`\`actana session logs ${session.sessionId}\` prints the transcript while the harness is running.`);
   }
   return settledWell(outcome) ? EXIT_OK : EXIT_FAILURE;
 }
@@ -428,8 +428,8 @@ async function sessionWait(
   const misused = misusedFlag(args, ["--wait-timeout"]);
   if (misused) return usage(deps, "wait", misused);
 
-  const [taskId, ...extra] = rest;
-  if (taskId === undefined) {
+  const [sessionId, ...extra] = rest;
+  if (sessionId === undefined) {
     return usage(deps, "wait", "a session id is required — `actana session wait <session>`");
   }
   if (extra.length > 0) return usage(deps, "wait", `unexpected argument "${extra[0]}"`);
@@ -441,8 +441,8 @@ async function sessionWait(
   if (timeout.error) return usage(deps, "wait", timeout.error);
 
   return withGateway(deps, args, paths, "wait", async (gateway) => {
-    deps.verbose(`attaching to session ${taskId} to wait for it to settle`);
-    const session = await gateway.wait(taskId);
+    deps.verbose(`attaching to session ${sessionId} to wait for it to settle`);
+    const session = await gateway.wait(sessionId);
     return awaitAttachedTurn(deps, args, session, timeout.ms);
   });
 }
@@ -485,7 +485,7 @@ async function sessionLs(
     const table = formatTable(
       header,
       rows.map((row) => [
-        row.taskId,
+        row.sessionId,
         row.status,
         row.live ? "yes" : "",
         row.harness,
@@ -517,20 +517,20 @@ async function sessionLogs(
   const misused = misusedFlag(args, ["--raw"]);
   if (misused) return usage(deps, "logs", misused);
 
-  const [taskId, ...extra] = rest;
-  if (taskId === undefined) {
+  const [sessionId, ...extra] = rest;
+  if (sessionId === undefined) {
     return usage(deps, "logs", "a session id is required — `actana session logs <session>`");
   }
   if (extra.length > 0) return usage(deps, "logs", `unexpected argument "${extra[0]}"`);
 
   return withGateway(deps, args, paths, "logs", async (gateway) => {
-    const logs: SessionLogs = await gateway.logs(taskId);
+    const logs: SessionLogs = await gateway.logs(sessionId);
     deps.verbose(`read the replay ring of pty ${logs.ptyId}`);
 
     if (args.json) {
       deps.out(
         formatJson({
-          taskId: logs.taskId,
+          sessionId: logs.sessionId,
           ptyId: logs.ptyId,
           rendered: !args.raw,
           screen: args.raw ? logs.raw : logs.screen,
@@ -569,8 +569,8 @@ async function sessionSend(
   const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout"]);
   if (misused) return usage(deps, "send", misused);
 
-  const [taskId, ...words] = rest;
-  if (taskId === undefined) {
+  const [sessionId, ...words] = rest;
+  if (sessionId === undefined) {
     return usage(deps, "send", "a session id is required — `actana session send <session> <text>`");
   }
   const timeout = waitTimeoutMs(args);
@@ -605,24 +605,24 @@ async function sessionSend(
       // design the issue's landmine is about: the attach would find a Session
       // sitting at a settled status and answer with last turn's outcome.
       const andReturn = args.enter ? " and a carriage return" : "";
-      deps.verbose(`sending ${text.length} characters to session ${taskId}${andReturn}, then waiting`);
-      const session = await gateway.sendAndWait(taskId, text, { enter: args.enter });
-      deps.err(`Sent ${text.length} characters to session ${taskId}${andReturn}.`);
+      deps.verbose(`sending ${text.length} characters to session ${sessionId}${andReturn}, then waiting`);
+      const session = await gateway.sendAndWait(sessionId, text, { enter: args.enter });
+      deps.err(`Sent ${text.length} characters to session ${sessionId}${andReturn}.`);
       return awaitAttachedTurn(deps, args, session, timeout.ms);
     }
 
     // One call, one PTY resolution, both writes (#204 review). The command no
     // longer decides anything about the return beyond passing on the flag.
-    const delivered = await gateway.send(taskId, text, { enter: args.enter });
+    const delivered = await gateway.send(sessionId, text, { enter: args.enter });
 
     if (args.json) {
-      deps.out(formatJson({ taskId, characters: text.length, enter: args.enter, delivered }));
+      deps.out(formatJson({ sessionId, characters: text.length, enter: args.enter, delivered }));
     } else if (delivered) {
       const andReturn = args.enter ? " and a carriage return" : "";
-      deps.err(`Sent ${text.length} characters to session ${taskId}${andReturn}.`);
+      deps.err(`Sent ${text.length} characters to session ${sessionId}${andReturn}.`);
     }
     if (!delivered) {
-      deps.err(`actana session send: the Core did not accept the write to session ${taskId}.`);
+      deps.err(`actana session send: the Core did not accept the write to session ${sessionId}.`);
       return EXIT_FAILURE;
     }
     return EXIT_OK;
@@ -633,7 +633,7 @@ async function sessionSend(
  * `actana session kill <session>`.
  *
  * **Works on a Session this CLI did not start**, which is the point of naming
- * Sessions by Task id: the PTY belongs to the Core, and a Panel, a cron job and
+ * Sessions by Session id: the PTY belongs to the Core, and a Panel, a cron job and
  * this command all name it the same way. Nothing about having started a Session
  * is remembered locally, so there is nothing here that could fail to recognise
  * one.
@@ -647,21 +647,21 @@ async function sessionKill(
   const misused = misusedFlag(args, []);
   if (misused) return usage(deps, "kill", misused);
 
-  const [taskId, ...extra] = rest;
-  if (taskId === undefined) {
+  const [sessionId, ...extra] = rest;
+  if (sessionId === undefined) {
     return usage(deps, "kill", "a session id is required — `actana session kill <session>`");
   }
   if (extra.length > 0) return usage(deps, "kill", `unexpected argument "${extra[0]}"`);
 
   return withGateway(deps, args, paths, "kill", async (gateway) => {
-    const { ptyId, killed } = await gateway.kill(taskId);
+    const { ptyId, killed } = await gateway.kill(sessionId);
     if (args.json) {
-      deps.out(formatJson({ taskId, ptyId, killed }));
+      deps.out(formatJson({ sessionId, ptyId, killed }));
     } else if (killed) {
-      deps.err(`Killed session ${taskId} (pty ${ptyId}).`);
+      deps.err(`Killed session ${sessionId} (pty ${ptyId}).`);
     }
     if (!killed) {
-      deps.err(`actana session kill: the Core did not kill session ${taskId}.`);
+      deps.err(`actana session kill: the Core did not kill session ${sessionId}.`);
       return EXIT_FAILURE;
     }
     return EXIT_OK;
@@ -823,7 +823,7 @@ function noTurnStartLine(harness: string | null): string {
 /** The identity fields `start` and `resume` report, in both output modes. */
 function startedFields(session: StartedSession): Record<string, unknown> {
   return {
-    taskId: session.taskId,
+    sessionId: session.sessionId,
     ptyId: session.ptyId,
     harness: session.harness,
     command: session.command,

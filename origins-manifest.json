@@ -7,7 +7,12 @@
     "actana/control": {
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "remote": "control/main",
-      "repo": "https://github.com/actana/control"
+      "repo": "https://github.com/actana/control",
+      "testPin": {
+        "commit": "aa03266415e969829b4616861a13c11cb04d1142",
+        "branch": "feat/556-core-session-rename",
+        "note": "Test-only vendored Core (packages/sdk/scripts/vendor-control-pin.mjs). An unmerged actana/control draft commit (PR 598): the SDK Session rename needs a Core that speaks Session to run its real-Core tests. Moves to the merged commit once control 598 merges. Lifted entries keep commit d7eeb65 as their provenance; their divergence is recorded per entry."
+      }
     },
     "actana/search": {
       "commit": "b96cf95b645c3c8a62739addad9bc24ee889157d",
@@ -48,7 +53,9 @@
       "destPath": "packages/cli/src/__tests__/cli-harness.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "eed1ec42e88155baaa409318680f550567129828389a3d07dc5f29e38bd69a6d",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "b4f46f1097d16f31a1ce4f8ea02c2dd44bfd62712958257e96f488409781ffd3",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -112,7 +119,9 @@
       "destPath": "packages/cli/src/__tests__/core-shell.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "0d0e93fd306f9351fc15a50c1ad1f9573766f7ea467032a726f40e511182f31c",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "dfc13e404f305f61149de5f6df5e2599c616306ef4c768e31e63e18db334f027",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -136,7 +145,9 @@
       "destPath": "packages/cli/src/__tests__/events-command.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "cf712ae9ec551fcf3ccae5c32237ba52136298152785a4b1ebeb09fa1c6770f0",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "dfd75da39b843cfbb18fafa168f1b94bec80f4e72fa304f98278b332b325b5d6",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -200,7 +211,9 @@
       "destPath": "packages/cli/src/__tests__/never-logs-a-blob.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "e6990af495628bdae8a1a546405605ab8a20b74fe504be9fb6c79944fa103ba0",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "f7d7dddc765f07c94a1b3ebab79923176d93cd1bca8e31585af75b2df770f0fe",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -296,7 +309,9 @@
       "destPath": "packages/cli/src/__tests__/session-attach.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "c9f123374bc36057ce0ec051e5c5524fae8de90b660593ba0bf717b61171cc89",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "af0001b05f0674728f044fb4ff068d39556d6dd35fc73754fd78b771750d4579",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -304,7 +319,9 @@
       "destPath": "packages/cli/src/__tests__/session-command.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "fffa3c801925fb012e2a49e6df04a9086360283e0c937b40dc3d3bb9ee32fa9e",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "79dd02e8bcddab5223899fcae5c806909343d5c60ad50f9df2afb9479ac8276b",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -312,7 +329,9 @@
       "destPath": "packages/cli/src/__tests__/skill-verbs-exist.test.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "465afd075b453887b58eda8a127613cd56fdc2c8ab3d43db6142fee72f75b58b",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "55cd5fed82205b38794632b755199a29fd5d25aafaa50b3f2cfb6ac1a69c708c",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -328,7 +347,7 @@
       "destPath": "packages/cli/src/run-client.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "99716ddd54f41c76fd33170b4e14b738c750787f85d2dfc7071b9b63cd751ee4",
-      "destSha256": "2b9148a25892e42729fa7ec8dbb7ed70511fe045545e7fda25fa66a55ab3aab7",
+      "destSha256": "f21ed0605b5b9e390f2baf852727174020593e1e500eeac91f421cc497241b14",
       "category": "cli",
       "note": "T-217: client nouns only; machine dispatch deferred"
     },
@@ -356,7 +375,9 @@
       "destPath": "packages/cli/src/kit/cli-args.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "a40136f7c8af35f738a98941da1f1530d81b789cd49671416f06a745046d6a9d",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "02b3dad6209e347f97fafe40802ba51677793d2e283f3a0245c6f251e030b14b",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -452,7 +473,9 @@
       "destPath": "packages/cli/src/core/core-shell-channel.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "9c7fbad7b34a55d53147d811f315f14a47f7b922890bb199842ce5f893431210",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "95791d5c983de2958a8b6ea940580214a90121e81ab4321804f4ade4dbef9fce",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -460,7 +483,9 @@
       "destPath": "packages/cli/src/core/core-shell.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "19e090672a2129a576693f05a674521e68ff72d891da68abf51a71db5988dc08",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "4be7b030d815163672af2f0e4f8f6febb94faeb6b5590c9c9cafcafb0280c805",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -484,7 +509,9 @@
       "destPath": "packages/cli/src/core/events-command.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "54f957085208a8e6d31d7b61e1acb68c343fee702d9325d604de7b1728afabef",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "c5a3ab20c8134ebfcf28923f40a71e2f7bcee7058527ae238688fa37701af0d7",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -508,7 +535,9 @@
       "destPath": "packages/cli/src/core/harness-resume.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "5b42f856f575cd66825730c47997c6220bbc83dbe6ae3d79b44a4c5f319ecddd",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "4e95cb787152fb0c812f7086a18c7e498b1f5fd871c200cbe71024224d124d52",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -542,7 +571,7 @@
       "sha256": "2d9810b4451306dd6919e5d0d188a5edf58485634bb21777a65767179fdc5f5a",
       "destSha256": "3179bc1a623ae91e69374fcd4ed492a6c5937062c55621d30351b92ec9c3c8f1",
       "category": "cli",
-      "note": "T-217: payload in packages/cli/data/orchestration-skill.json"
+      "note": "T-217: payload in packages/cli/data/orchestration-skill.json. client#10: the payload there says sessionId where the Control twin (packages/shared/src/orchestration-skill-payload.ts) says taskId; diverges until actana/control#598 renames its twin in the same wave"
     },
     {
       "sourceRepo": "actana/control",
@@ -606,7 +635,9 @@
       "destPath": "packages/cli/src/core/session-attach-channel.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "73e4fb0ea1d165cade5b1f21e2487686b1d7e5c1cefa579a571b3d9133fa78ac",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "fc2791961aa184ed8a896e23ee0b4c6fcfee6694203aecb4dc47d23c476d231f",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -614,7 +645,9 @@
       "destPath": "packages/cli/src/core/session-attach.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "3dfe05594735c99646cb9ea3778498ab4639582da1448088c2323cb1afa28283",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "d4f2785507fc918dac6f3dead2c5ec925137b56cd01f7d98de7aac0b5b8f0744",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -622,7 +655,9 @@
       "destPath": "packages/cli/src/core/session-command.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "508f4e709281a98f279b71268ad466c2babd756afa3e46d33cbfb02800537715",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "a9e506bc1636322677b9c8bf36cd8af3d39b3ba49df27e43185471522ba17db0",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -630,16 +665,18 @@
       "destPath": "packages/cli/src/core/session-gateway.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "6965547568c9dff24aeb1e2186ba4ce48a09e77ed566d41258f608a74d44c728",
-      "category": "cli"
+      "category": "cli",
+      "destSha256": "e16e556d5d26f37e94e69eae36e2855467ef179483e53ee50b0f19ab94a5b6af",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/client",
       "sourcePath": "packages/sdk/src/pairing/server/index.ts",
       "destPath": "packages/sdk/src/pairing/server/index.ts",
       "commit": "848269c",
-      "sha256": "5b26eb456616ad624fe926b1b3c1eacbea8957d90008a68ff5adb22832f6bceb",
+      "sha256": "63aceb85ce5ce6f79e0b4ae32a3bba4c3983250850680d346bff8ad0f07840b0",
       "category": "pairing",
-      "note": "T-210: createPairing composition root — client-original"
+      "note": "T-210: createPairing composition root — client-original; actana/client#12 adds audit, logger and bearerDays options"
     },
     {
       "sourceRepo": "actana/control",
@@ -657,9 +694,10 @@
       "destPath": "packages/sdk/src/pairing/server/revocation.ts",
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "d066553308a8678f176547ab2a06525e7c33a71a7d6e24aa37c6cd548e0501e0",
-      "destSha256": "bbcbc9473d3081c4bdd9b990f97cfba3d06a77ad9520e7f4e4e630e98d18272f",
+      "destSha256": "bf27d8c40f202f2d1afee37312c0301ddbc66a2b602714d6e37a24533c3c7b20",
       "liftTableRow": "server/revocation",
-      "category": "pairing"
+      "category": "pairing",
+      "note": "actana/client#12: intentional divergence from Control — startPairingRevocationSweep returns a ready promise beside stop()"
     },
     {
       "sourceRepo": "actana/control",
@@ -669,7 +707,8 @@
       "sha256": "8ffd17376e72abcc6c83ec9b215fd42cafdfe792a78778ed0bb72b3d9f84ed80",
       "liftTableRow": "server/redeem-route",
       "category": "pairing",
-      "destSha256": "9dfdcd255a74c1679a401c1987f1484705e0c7217b1fbc80d0392f7e6fdd2bee"
+      "destSha256": "c3b0f29ea3351c0427869c12d541ee2c6bd443605b423f2eb5e1c807a06c81e1",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",
@@ -679,7 +718,7 @@
       "sha256": "28e2ceda49e3cf0233ff110bf456dde213595e2c70fb80358479260dfaa92bb4",
       "liftTableRow": "server/preauth-gate",
       "category": "pairing",
-      "destSha256": "2678e96ff3555893c7ee4aafae899709d9841a14c267cc6864c9742cce45457a"
+      "destSha256": "82fd8b2b4a98fa651fa63a5e4e31fac90cdb75e3f5d02e49e0e0e749ce69d41b"
     },
     {
       "sourceRepo": "actana/control",
@@ -698,7 +737,8 @@
       "sha256": "97ff29a06af6040a7c939e950203ddf16f6acd13a9441425348b17cdcd55975a",
       "liftTableRow": "stores/postgres",
       "category": "pairing",
-      "destSha256": "943670655f2fffe875a9915089f7bd917cafb84adc48b73008af489a0315eb8a"
+      "destSha256": "ea0019101dcb22412d684143f6bf1725f3d6c0206c97defb52b77194e4ffed0d",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",
@@ -779,7 +819,8 @@
       "note": "top half of pairing-store.ts",
       "liftTableRow": "stores/json-file",
       "category": "pairing",
-      "destSha256": "06b6a66ca48953814be2b4b5e9cb9a9e8806ea1780de52b1ac5331db1b16ed8f"
+      "destSha256": "1d53cffaaeaeffd14c37daec204ed97450734550348f62a891911ea5e52059d5",
+      "divergence": "actana/client#14: claimAttempt reserves an attempt and releaseAttempt hands it back on a matching code, so only mismatches are charged (Control charges on mismatch only since 0.4.5)"
     },
     {
       "sourceRepo": "actana/control",
@@ -796,7 +837,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "bdcf548e3f59566a3730b7c7149851529b43fdaa8ccf3a5063d25d6261facbac",
       "category": "sdk",
-      "destSha256": "871140f8f7abf297705750c0660eac5d02029d0c5e502787bca6deb9f50b5d3f"
+      "destSha256": "b5d4dadfe7f04d9e98cadb2dbd2b5c4883d79db5125d32947dc984629080c50e",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -886,7 +928,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "b778528d24f5e577cbc2f775eb562fa047f8bc6c6572ed06bbc1008e205efeec",
       "category": "sdk",
-      "destSha256": "f9d5141508f105a68b80ae5c8f3bba175ee96e206958f3a0bd0e0c856a24ed27"
+      "destSha256": "2f7d97c3cbbf930c4b358b91278a925618453432d32bb0c3f7dac8271511e816",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -895,7 +938,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "7224657be13600ecbff9146e552779dd5cf4b2cd90d0ebd573548ee7a378b856",
       "category": "sdk",
-      "destSha256": "42d3ffa7328a3219f090359d8478938a2e3fa1e6f0d18edb78d1d283f7ae65b1"
+      "destSha256": "ebb69cb79a7eccd24dca6cf2877ce00b0d5f62a7b2a7bf399fe840f23c22bfdc",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -904,7 +948,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "8bbf82f9085e4fc883ed4b6e10f254cadb227b77f0a3928dd12af4299a3d9151",
       "category": "sdk",
-      "destSha256": "f53ecd65097e0b415b86d83597bb1c5be04b991ae3fb090d02146d0b18e330f3"
+      "destSha256": "d4c01787ffa960e7b80054815ddcbb70f307bb2c688256e026cf8639cae1adad",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -921,7 +966,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "045c8a92077e316ff40d8a316bc3e4397ed8896ee6c235352ef534d0c806731c",
       "category": "sdk",
-      "destSha256": "e02a2fb2ec65bb4d3a5d474ea178806aaa3e74d8940934ba6deb82e915ec1ef3"
+      "destSha256": "ab4c42eb4581d440a7ab0373aec13ba8b929c71c7baf64d2d93514d384546d7c",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -930,7 +976,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "e0b02a7ec7fd2dceaa6eabd94a024bfc7d6d9f6f030b67b2957c8769059b9c49",
       "category": "sdk",
-      "destSha256": "9818b56f9d01b6387ce810fff0b5b7c568a303e620bd3cdeee541a09a83411b7"
+      "destSha256": "25e6518a794394420d50bb169e1778580d736f27fa98bdd0ce259cc25a5d536f",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -939,7 +986,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "2b3149eb853cb306e8422c857fec0d1f359f60688bb66f36fdedaaaaadffbc81",
       "category": "sdk",
-      "destSha256": "9307fa4a09ae20e6006b28be3543bb93bf4c9d89152fe39f1f0e8e478542d220"
+      "destSha256": "01d2923012b3e1ebac422db8ef810c02b17750ce988c58331baac894d77953a2",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1032,7 +1080,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "56bee501097122eedb99ff66244c6f00de866aecfdf4d1e485e319799eb6dd61",
       "category": "sdk",
-      "destSha256": "f14d84a50dc1864b563f3251d88456868672b00137f00139f721fb87eddbc420"
+      "destSha256": "6836bbba4e7f71a78d3dfd2fc42e28734b0f4d2c85f46687fa57a41657ca0cb3",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1077,7 +1126,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c",
       "category": "sdk",
-      "destSha256": "3dd2b723d62d36b25d440ba939f7cc3910afbf02618be38bba21e290073d0a4c"
+      "destSha256": "c4486ff92d535b88248153df026b9d58bec5f9abb148325b57a1dfc017f2a0bb",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1095,7 +1145,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "339b0eccf9c43a4c9d04c896e05f117d2d355824eacc134e81bd8f8512d7dcf6",
       "category": "sdk",
-      "destSha256": "bdbd9fe7a0956feb28899c1ac18ff46725f5e91a3280aab4394018d5482c752e"
+      "destSha256": "81c8f3acff678a042867634681dbeb735a9e463f9bdbe65b77a3fff566f38405",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",
@@ -1140,7 +1191,8 @@
       "commit": "d7eeb65cd1f15e2bda56e7285da8b8ba8d3879cb",
       "sha256": "fbcf16ecc04aec7a76fffbe4b1226407aaf6fb4cf3225cd607aa67057f38aee5",
       "category": "sdk",
-      "destSha256": "5b24f507761d76b5fd2e303f17624bccbd174d8c07d80ec8809334c0f98140f6"
+      "destSha256": "e2912feb811ed3aaea13d60c8c819750a612fdeb7563d0892131b08a3c7364ca",
+      "note": "client#10: Task renamed to Session (taskId to sessionId, task:* to session:*, core-link 0.18.0); diverges from the Control source until actana/control#556 lands"
     },
     {
       "sourceRepo": "actana/control",

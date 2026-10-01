@@ -7,6 +7,7 @@
       "@actana/sdk/pairing/stores/json-file": ["src/pairing/stores/json-file.ts"],
       "@actana/sdk/pairing/stores/postgres": ["src/pairing/stores/postgres.ts"],
       "@actana/sdk/core": ["src/core.ts"],
+      "@actana/sdk/core/link-frames": ["src/core/browser.ts"],
       "@actana/sdk/search": ["src/search.ts"]
     },
     "target": "ES2022",

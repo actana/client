@@ -91,9 +91,19 @@ export interface PairingStore<Grant = unknown> {
 
   /**
    * Atomically: refuse when revoked, consumed, expired or attempts >= cap;
-   * otherwise count this attempt and hand back what the compare needs.
+   * otherwise reserve this attempt and hand back what the compare needs.
+   *
+   * The reservation is what keeps the cap race-proof; it is a charge only if
+   * the code then fails to match. The caller hands it back with
+   * {@link releaseAttempt} the moment the code compares equal.
    */
   claimAttempt(sessionId: string, now: Date): Promise<AttemptClaim<Grant>>;
+
+  /**
+   * Give back the attempt a {@link claimAttempt} reserved, because the code
+   * matched. Never takes the count below zero; a no-op for an unknown session.
+   */
+  releaseAttempt(sessionId: string): Promise<void>;
 
   /** Spend the session. False when another redemption won. */
   consume(sessionId: string, now: Date): Promise<boolean>;
