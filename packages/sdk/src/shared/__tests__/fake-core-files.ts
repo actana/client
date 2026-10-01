@@ -356,6 +356,9 @@ export async function startFakeCoreFiles(): Promise<FakeCoreFiles> {
                 message: `${confined.relative} is a non-empty directory`,
               });
             }
+            // Real Core (files-ops writeSingleFile): an empty directory is removed and the
+            // file is written in its place. Match that so a missing client guard is visible.
+            await fsp.rmdir(confined.absolute);
           }
           await fsp.mkdir(path.dirname(confined.absolute), { recursive: true });
           await fsp.writeFile(confined.absolute, body);

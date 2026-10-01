@@ -5,8 +5,10 @@
 // Paths on the wire are home-relative: `shared/…`. The Shared folder name is fixed
 // (`SHARED_FOLDER_NAME`). Dot-dot and absolute paths are refused here too, before any
 // request leaves.
+//
+// Value-import nothing from `../core/files-http.ts`: that module loads undici, and
+// `@actana/sdk/shared` (including the S3 mode) must stay free of it.
 import type { CoreFilesFetch, CoreFilesRequest } from "../core/files-http.ts";
-import { refusalFrom } from "../core/files-http.ts";
 import { parseFilePath, parseSharedPath } from "./path.ts";
 import {
   CoreSharedError,
@@ -124,9 +126,27 @@ export function mapFilesRefusal(status: number, code: string, message: string): 
   return unavailable(message || code || `HTTP ${status}`, status);
 }
 
+/** Local refusal reader — do not call files-http.refusalFrom (that pulls undici). */
+async function readRefusal(res: Response, what: string): Promise<{ status: number; code: string; message: string }> {
+  let code = "";
+  let message = "";
+  try {
+    const body = (await res.json()) as { code?: unknown; error?: unknown };
+    if (typeof body.code === "string") code = body.code;
+    if (typeof body.error === "string") message = body.error;
+  } catch {
+    // Non-JSON refusal body.
+  }
+  return {
+    status: res.status,
+    code: code || `http-${res.status}`,
+    message: message || `${what} was refused with HTTP ${res.status}`,
+  };
+}
+
 async function throwFromResponse(res: Response, what: string): Promise<never> {
-  const err = await refusalFrom(res, what);
-  throw mapFilesRefusal(err.status, String(err.code), err.message);
+  const err = await readRefusal(res, what);
+  throw mapFilesRefusal(err.status, err.code, err.message);
 }
 
 async function readNdjson(res: Response): Promise<Record<string, unknown>[]> {
@@ -240,8 +260,27 @@ export function createThroughCoreShared(options: ThroughCoreSharedOptions): Core
     await throwFromResponse(res, `creating folder ${relative}`);
   }
 
+  /**
+   * A put must not land on a folder. The real Core replaces an *empty* directory with a
+   * file (`files-ops.ts` writeSingleFile); CoreShared refuses both empty and non-empty
+   * folders with `is-folder`, matching the S3 mode.
+   */
+  async function assertNotFolder(relative: string): Promise<void> {
+    const res = await send({
+      method: "HEAD",
+      url: url("files", { path: homeRelativeSharedPath(relative) }),
+      headers: authHeaders(bearer),
+    });
+    if (res.status === 404) return;
+    if (!res.ok) await throwFromResponse(res, `checking ${relative}`);
+    if (res.headers.get("x-actana-transfer-kind") === "tar") {
+      throw new CoreSharedError("is-folder", "a folder is already at that path", { status: 400 });
+    }
+  }
+
   async function putFile(path: string, body: Uint8Array | string): Promise<void> {
     const parsed = parseFilePath(path);
+    await assertNotFolder(parsed.relative);
     // Parents come into being on the Core for a single-file write (files-ops writeSingleFile).
     const bytes = typeof body === "string" ? utf8.encode(body) : body;
     const res = await send({
@@ -318,11 +357,11 @@ export function createThroughCoreShared(options: ThroughCoreSharedOptions): Core
         // A file-spelled DELETE on a folder is 400 on the Core; CoreShared treats it as
         // "no file of that name" (same as the S3 mode's HEAD-then-DELETE).
         if (!parsed.folder && res.status === 400) {
-          const err = await refusalFrom(res, `deleting ${parsed.relative}`);
+          const err = await readRefusal(res, `deleting ${parsed.relative}`);
           if (/is a folder/i.test(err.message)) {
             throw new CoreSharedError("not-found", "not found", { status: 404 });
           }
-          throw mapFilesRefusal(err.status, String(err.code), err.message);
+          throw mapFilesRefusal(err.status, err.code, err.message);
         }
         await throwFromResponse(res, `deleting ${parsed.relative}`);
       }
@@ -398,12 +437,13 @@ export function createThroughCoreShared(options: ThroughCoreSharedOptions): Core
       return written;
     },
 
+    // Tip first, then data: an event appended between the two is not in `changes` and is
+    // still ahead of the returned cursor, so the next watch reports it. Bound replay by tip.
     // No cursor: list every file under shared (Files API), because the change feed's first
     // scan is a baseline and does not report what was already there (shared-folder-watcher).
-    // With a cursor: replay `shared:changed` from the event log; the opaque cursor is the
-    // decimal event id.
     async watch(since): Promise<SharedWatchResult> {
       const cursorId = parseCursor(since);
+      const tip = await options.events.tip();
       if (cursorId === undefined) {
         const entries = await listRaw(SHARED_FOLDER_NAME, "all");
         const changes: SharedChange[] = entries
@@ -416,10 +456,9 @@ export function createThroughCoreShared(options: ThroughCoreSharedOptions): Core
             ...(e.modifiedAt ? { modifiedAt: e.modifiedAt } : {}),
           }));
         changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-        const tip = await options.events.tip();
         return { changes, cursor: String(tip) };
       }
-      const events = await options.events.since(cursorId);
+      const events = (await options.events.since(cursorId)).filter((event) => event.eventId <= tip);
       const changes: SharedChange[] = events.map((event) =>
         event.deleted
           ? { path: event.path, kind: "file" as const, deleted: true }
@@ -432,15 +471,20 @@ export function createThroughCoreShared(options: ThroughCoreSharedOptions): Core
             },
       );
       changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-      const tip = await options.events.tip();
       return { changes, cursor: String(tip) };
     },
 
-    // The Files API has no signed-URL route. This mode returns a plain GET URL of the file
-    // (same origin, `?path=shared/…`). On a loopback Core with no bearer it downloads with
-    // no credentials; a bearer-gated Core still needs auth on that URL (see low-confidence).
+    // The Files API has no unsigned download URL (mTLS + bearer on a real Core). A loopback
+    // Core with no bearer may hand back a plain GET URL for the contract suite; anything
+    // with a bearer is refused — do not invent an expiry the Core does not enforce.
     async signedUrl(path, urlOptions = {}): Promise<SharedSignedUrl> {
       const parsed = parseFilePath(path);
+      if (bearer !== null) {
+        throw new CoreSharedError(
+          "unavailable",
+          "through-the-Core signedUrl needs a loopback Core with no bearer; a real Core's Files URL is not an unsigned download",
+        );
+      }
       const asked = urlOptions.expiresInSeconds ?? DEFAULT_SIGNED_URL_SECONDS;
       if (!Number.isInteger(asked) || asked < 1) {
         throw new CoreSharedError("invalid-argument", "expiresInSeconds must be a whole number of at least 1");

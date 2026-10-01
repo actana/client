@@ -97,6 +97,13 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
         expect((await shared.list("")).map((e) => `${e.kind}:${e.path}`)).toEqual(["folder:dir", "file:file"]);
         expect(text((await shared.get("file")).body)).toBe("x");
       });
+
+      it("refuses a file where an empty folder is", async () => {
+        await shared.mkdir("empty");
+        await expectCode(shared.put("empty", "x"), "is-folder");
+        expect(kinds(await shared.list(""))).toEqual(["folder:empty"]);
+        await expectCode(shared.get("empty/"), "is-folder");
+      });
     });
 
     describe("list", () => {

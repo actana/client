@@ -92,6 +92,99 @@ describe("through the Core: watch over the event log cursor", () => {
       await core.close();
     }
   });
+
+  it("does not lose a change appended between tip and since", async () => {
+    const core = await startFakeCoreFiles();
+    try {
+      const shared = createThroughCoreShared({
+        baseUrl: core.baseUrl,
+        fetch: fakeCoreFetch(),
+        events: core.events,
+      });
+      await shared.put("old.txt", "old");
+      const base = await shared.watch();
+      await shared.put("seen.txt", "seen");
+
+      // Event source that appends one more change after tip() returns and before since() runs.
+      let raceId = 0;
+      const racing = {
+        tip: () => {
+          const tip = core.events.tip();
+          raceId = tip + 1;
+          return tip;
+        },
+        since: (since: number) => {
+          // Append after tip was taken: without tip-first+bound this is lost behind the cursor.
+          const all = [
+            ...core.events.since(since),
+            { eventId: raceId, path: "raced.txt", size: 5, mtime: Date.now(), deleted: false },
+          ];
+          return all;
+        },
+      };
+      const mid = createThroughCoreShared({
+        baseUrl: core.baseUrl,
+        fetch: fakeCoreFetch(),
+        events: racing,
+      });
+      const first = await mid.watch(base.cursor);
+      expect(first.changes.map((c) => c.path)).toEqual(["seen.txt"]);
+      expect(first.changes.map((c) => c.path)).not.toContain("raced.txt");
+      // Cursor is the tip from before the race; a later watch that includes raceId reports it.
+      const followUp = {
+        tip: () => raceId,
+        since: (since: number) =>
+          [
+            ...core.events.since(since),
+            { eventId: raceId, path: "raced.txt", size: 5, mtime: Date.now(), deleted: false },
+          ].filter((e) => e.eventId > since),
+      };
+      const next = await createThroughCoreShared({
+        baseUrl: core.baseUrl,
+        fetch: fakeCoreFetch(),
+        events: followUp,
+      }).watch(first.cursor);
+      expect(next.changes.map((c) => `+${c.path}`)).toContain("+raced.txt");
+    } finally {
+      await core.close();
+    }
+  });
+});
+
+describe("through the Core: signedUrl", () => {
+  it("refuses when a bearer is configured (Files URL is not an unsigned download)", async () => {
+    const core = await startFakeCoreFiles();
+    try {
+      const shared = createThroughCoreShared({
+        baseUrl: core.baseUrl,
+        bearer: "not-a-loopback-token",
+        fetch: fakeCoreFetch(),
+        events: core.events,
+      });
+      await shared.put("a.txt", "a");
+      await expectCode(shared.signedUrl("a.txt"), "unavailable");
+    } finally {
+      await core.close();
+    }
+  });
+});
+
+describe("through the Core: empty folder put", () => {
+  it("refuses put onto an empty folder with is-folder (does not replace it)", async () => {
+    const core = await startFakeCoreFiles();
+    try {
+      const shared = createThroughCoreShared({
+        baseUrl: core.baseUrl,
+        fetch: fakeCoreFetch(),
+        events: core.events,
+      });
+      await shared.mkdir("empty");
+      await expectCode(shared.put("empty", "x"), "is-folder");
+      expect((await shared.list("")).map((e) => `${e.kind}:${e.path}`)).toEqual(["folder:empty"]);
+    } finally {
+      await core.close();
+    }
+  });
 });
 
 describe("through the Core: mkdir, rm, move", () => {
