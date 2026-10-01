@@ -13,7 +13,9 @@ The Panel may use only the public SDK, so anyone else (a Studio, a script, a bot
 
 ## Before you start
 
-- **A Core** you can pair with, that announces the `shared` capability on `ready` (it then answers `sharedAttach`, `sharedCredentials` and `sharedDetach`); the script refuses a Core that does not.
+- **A Core** you can pair with. For step 2 it must also answer `sharedAttach`, `sharedCredentials` and `sharedDetach`, which **no real Core does yet** (see the box below). The script refuses a Core that does not announce the `shared` capability on `ready`; announcing it is not the same as answering the frames.
+
+> **Status of the Core side (read this first).** No real Core answers `sharedAttach`, `sharedCredentials` or `sharedDetach` today. The Core side of step 2 is actana/control#562, which is open and not built. A real Core on control `feat/0.5.0` announces `shared` on `ready` as `{ version: 1, backend: "local" }` (control #561) and has no handler for the three frames: it answers them with an `error` frame. Against it, the capability gate in step 2 passes, `sharedAttach` is refused (exit 4), and steps 3 and 4, which read the folder in S3, would wait out their timeouts because nothing syncs a Core's files there. Steps 2 to 4 therefore cannot complete against a real Core until #562 lands. Step 1 (pairing) does not depend on it.
 - **An S3 store with a per-Core policy.** The recipe uses SeaweedFS, the SDK's default, set up as in actana/control `deploy/seaweedfs`: STS enabled, an OIDC provider that trusts your controller's JWKS, and a role limiting a Core to `<prefix>/<core-id>/`. The other issuers (`createStsKeyIssuer`, `createR2KeyIssuer`, `createSupabaseKeyIssuer`, see [shared-key-issuers.md](./shared-key-issuers.md)) drop into the same place in `src/attach.mjs`.
 - **The controller's signing key**, an RSA private key in PEM. It is the master key: the issuer signs a short token with it, SeaweedFS swaps the token for a Core's key, and it is never sent to a Core.
 - Node 24, and `pnpm install` in this repository.
@@ -97,3 +99,5 @@ There is also no single call for "attach": the recipe sends the three frames wit
 ## What was run against what
 
 See the pull request that added this page for the run, step by step. In short: the SeaweedFS-backed parts run in CI against the pinned SeaweedFS (`shared-key-seaweedfs`); everything that needs a Core runs against a fake Core in a test (`examples/panel-recipe/__tests__/fake-core.mjs`). No test here runs a real Core.
+
+**Nothing here can yet be run end to end against a real Core.** The fake Core announces `{ version: 1 }` and answers `sharedAttach` with `attached`, which follows the SDK's frame definitions and is ahead of any real Core: the real Core's side is actana/control#562, not built, and it announces `{ version: 1, backend: "local" }` and refuses the frames. The issue's Done when (the example runs end to end against a real Core and SeaweedFS) is waiting on #562, not only on someone having a Core at hand.

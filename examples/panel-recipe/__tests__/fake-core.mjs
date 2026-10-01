@@ -2,6 +2,12 @@
 // the SDK documents (`@actana/sdk/core`'s `link-frames`). It is a socket FACTORY for
 // `CoreClient({ createSocket })`, so the recipe's steps run on the real SDK client against it.
 //
+// **Its attach answer is ahead of any real Core.** It announces `shared: { version: 1 }` and answers
+// `sharedAttach` with `attached`, as the SDK's frame definitions say a Core should. No real Core does:
+// control `feat/0.5.0` announces `{ version: 1, backend: "local" }` and has no handler for the three
+// frames (it answers `error`); that side is control#562, not built. Its `reclaimResult` and
+// `ptySubscribeAck` also leave out `clientId` and `holding`.
+//
 // It stands in for the things a unit test cannot have: a Core, and a harness. What it does:
 //   - `ready` (with the `shared` capability), `auth` -> `authOk`, `reclaim`, `subscribe`;
 //   - `sessionsMutate` create -> a Session row; `spawn` -> `spawned`, then calls the `harness` hook

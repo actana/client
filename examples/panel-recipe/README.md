@@ -14,6 +14,8 @@ __tests__/            the tests, a fake Core and an in-memory Shared folder
 
 ## Run it
 
+> **Status of the Core side (read this first).** No real Core answers `sharedAttach`, `sharedCredentials` or `sharedDetach` today. The Core side of step 2 is actana/control#562, which is open and not built. A real Core on control `feat/0.5.0` announces `shared` on `ready` as `{ version: 1, backend: "local" }` (control #561) and has no handler for the three frames: it answers them with an `error` frame. Against it, the capability gate in step 2 passes, `sharedAttach` is refused (exit 4), and steps 3 and 4, which read the folder in S3, would wait out their timeouts because nothing syncs a Core's files there. Steps 2 to 4 therefore cannot complete against a real Core until #562 lands. Step 1 (pairing) does not depend on it.
+
 From the repository root, after `pnpm install` (Node 24):
 
 ```sh
@@ -71,4 +73,4 @@ Keep the blob and the signing key out of the repository. The script never prints
 CI=1 NODE_OPTIONS=--max-old-space-size=2048 pnpm exec vitest run examples/panel-recipe/__tests__/recipe.test.mjs --maxWorkers=1
 ```
 
-One file at a time; the others are `session`, `task`, `attach`, `report-contract` and `seaweedfs` under `__tests__/`. Everything that needs a Core runs against `__tests__/fake-core.mjs`, a hand-written core-link peer, so the tests say nothing about a real Core. `seaweedfs.test.mjs` runs the S3-backed steps against a real SeaweedFS and is skipped unless `SEAWEEDFS_ENDPOINT` is set (CI job `shared-key-seaweedfs` sets it and fails the job if the file is skipped).
+One file at a time; the others are `session`, `task`, `attach`, `report-contract` and `seaweedfs` under `__tests__/`. Everything that needs a Core runs against `__tests__/fake-core.mjs`, a hand-written core-link peer, so the tests say nothing about a real Core. Its attach answer follows the SDK's frames and is ahead of any real Core (control#562). `seaweedfs.test.mjs` runs the S3-backed steps against a real SeaweedFS and is skipped unless `SEAWEEDFS_ENDPOINT` is set (CI job `shared-key-seaweedfs` sets it and fails the job if the file is skipped).
