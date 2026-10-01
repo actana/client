@@ -1,6 +1,6 @@
 // The SDK's first HTTPS surface, over a real mutual TLS handshake (#167).
 //
-// Everything this package did before `project.files.*` was a WebSocket, and
+// Everything this package did before `client.files.*` was a WebSocket, and
 // `core-link-mtls.test.ts` proves that leg. This is the other one, and it is
 // not the same claim: **`fetch` is undici, and it ignores `options.cert` and
 // `options.key` outright.** A client certificate reaches it only through a
@@ -36,7 +36,6 @@ import { collect } from "../../__tests__/files-rig";
 import { startCoreRig, type CoreRig } from "../../__tests__/fake-core-link";
 
 const SECRET = "files-mtls-suite-secret-32-bytes-xx";
-const PROJECT = "proj_mtls";
 
 /**
  * A TLS-layer refusal as it reaches a caller. Node words it differently across
@@ -81,9 +80,8 @@ async function startCore(): Promise<{ blob: CoreRegistrationBlob; caCert: string
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "actana-sdk-mtls-")));
   fs.writeFileSync(path.join(root, "notes.txt"), "over mutual TLS");
 
-  const projectRoot = root;
   const routes = createCoreFilesRequestHandler({
-    filesPort: { projectRoot: (id) => (id === PROJECT ? projectRoot : null) },
+    filesPort: { workspaceRoot: () => root },
     authVerifier: (bearer) => verifyBearer(bearer, SECRET),
   });
   server = https.createServer(
@@ -144,7 +142,7 @@ describe("the file surface over mutual TLS", () => {
     // itself — one origin, one certificate, two protocols (ADR 0028).
     expect(core.httpsBaseUrl).toBe(`https://127.0.0.1:${new URL(blob.endpoint).port}`);
 
-    const file = await core.project(PROJECT).files.download({ path: "notes.txt" });
+    const file = await core.files.download({ path: "notes.txt" });
 
     expect((await collect(file.stream)).toString("utf8")).toBe("over mutual TLS");
   });
@@ -154,7 +152,7 @@ describe("the file surface over mutual TLS", () => {
     const core = await clientFrom(blob);
 
     const lines = [];
-    for await (const line of core.project(PROJECT).files.upload({
+    for await (const line of core.files.upload({
       path: "written.txt",
       body: (async function* () {
         yield new TextEncoder().encode("uploaded over mTLS");
@@ -175,7 +173,7 @@ describe("the file surface over mutual TLS", () => {
     // the one under test.
     const caOnly = new Agent({ connect: { ca: caCert } });
     const attempt = undiciFetch(
-      `https://127.0.0.1:${port}/v1/projects/${PROJECT}/files?path=notes.txt`,
+      `https://127.0.0.1:${port}/v1/files?path=notes.txt`,
       { dispatcher: caOnly },
     );
 
@@ -198,7 +196,7 @@ describe("the file surface over mutual TLS", () => {
     const agent = new Agent({
       connect: { ca: blob.caCert, cert: blob.clientCert, key: blob.clientKey },
     });
-    const url = `https://127.0.0.1:${port}/v1/projects/${PROJECT}/files?path=notes.txt`;
+    const url = `https://127.0.0.1:${port}/v1/files?path=notes.txt`;
     const headers = { authorization: `Bearer ${blob.bearer}` };
 
     // The same certificate, the same Core, the same dispatcher — and only the
@@ -225,7 +223,7 @@ describe("the file surface over mutual TLS", () => {
 
     const res = await send({
       method: "GET",
-      url: `${new URL(blob.endpoint.replace("wss://", "https://")).origin}/v1/projects/${PROJECT}/files?path=notes.txt`,
+      url: `${new URL(blob.endpoint.replace("wss://", "https://")).origin}/v1/files?path=notes.txt`,
       headers: {},
     });
 
@@ -233,15 +231,15 @@ describe("the file surface over mutual TLS", () => {
     expect(((await res.json()) as { code: string }).code).toBe("unauthorized");
   });
 
-  it("reuses one dispatcher across every Project handle a client hands out", async () => {
+  it("reuses one dispatcher across every request a client sends", async () => {
     const { blob } = await startCore();
     const core = await clientFrom(blob);
 
-    // Two handles, two requests, one connection pool. A dispatcher per handle
-    // would mean a fresh TLS handshake for every `client.project(id)` — which a
-    // loop over a fleet's Projects does once per iteration.
-    const first = await core.project(PROJECT).files.download({ path: "notes.txt" });
-    const second = await core.project(PROJECT).files.download({ path: "notes.txt" });
+    // Two requests, one connection pool. A dispatcher per request would mean a
+    // fresh TLS handshake for every `client.files` call — which a loop over a
+    // folder's files does once per iteration.
+    const first = await core.files.download({ path: "notes.txt" });
+    const second = await core.files.download({ path: "notes.txt" });
     await collect(first.stream);
     await collect(second.stream);
 

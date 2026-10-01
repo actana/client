@@ -95,7 +95,7 @@ describe("download", () => {
     async () => {
       const core = await clientFor(await serveBytes(GIGABYTE));
 
-      const file = await core.project("proj_1").files.download({ path: "huge.bin" });
+      const file = await core.files.download({ path: "huge.bin" });
       expect(file.size).toBe(GIGABYTE);
 
       const before = process.memoryUsage();
@@ -155,7 +155,7 @@ describe("download", () => {
     });
     await client.connect();
 
-    const file = await client.project("proj_1").files.download({ path: "a.txt" });
+    const file = await client.files.download({ path: "a.txt" });
     const reader = file.stream.getReader();
     await reader.read();
     await reader.cancel();
@@ -181,7 +181,7 @@ describe("download", () => {
     });
     await client.connect();
 
-    const file = await client.project("proj_1").files.download({ path: "a.txt" });
+    const file = await client.files.download({ path: "a.txt" });
 
     expect(file.stream.locked).toBe(false);
     expect(await new Response(file.stream).text()).toBe("x");

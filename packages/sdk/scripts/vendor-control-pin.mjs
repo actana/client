@@ -1,14 +1,14 @@
-// Extract actana/control @ aa03266 (unmerged draft PR 598, feat/556-core-session-rename) for test-only @actana/core and @actana/shared aliases.
+// Extract actana/control @ 9d91c77 (merged PR 620, the Files API at /v1/files, on feat/0.5.0) for test-only @actana/core and @actana/shared aliases.
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findActanaControlSibling } from "./find-actana-control-sibling.mjs";
 
-const PIN = "aa03266415e969829b4616861a13c11cb04d1142";
+const PIN = "9d91c77b6190520ba69dd6cb338f85b931f0ba3c";
 const here = path.dirname(fileURLToPath(import.meta.url));
-// Same path vitest.config.ts resolves: <client-root>/.vendor/control-aa03266
-const vendorRoot = path.resolve(here, "../../../.vendor/control-aa03266");
+// Same path vitest.config.ts resolves: <client-root>/.vendor/control-9d91c77
+const vendorRoot = path.resolve(here, "../../../.vendor/control-9d91c77");
 const vendorSrc = path.join(vendorRoot, "src");
 const controlRepo = findActanaControlSibling(here);
 

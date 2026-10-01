@@ -100,11 +100,18 @@
 export const CORE_FILES_ERROR_CODES = [
   "unauthorized",
   "not-found",
+  // Wire vocabulary only. A 0.5.0 Core has no Projects and no longer sends this
+  // (control #557), and nothing in this package sends a Project id. It stays in
+  // the list because the Core's docs table still names it and
+  // `files-error-code-contract.ts` pins the list to that table both ways; drop
+  // it with the table.
   "project-not-found",
   "method-not-allowed",
   "bad-request",
   "absolute-path",
   "dot-dot-segment",
+  // A path that resolves outside the home (a symlink that leaves it). The code
+  // keeps its published spelling on every route (control `files-wire.ts`).
   "outside-project-root",
   "malformed-path",
   "transfer-in-progress",

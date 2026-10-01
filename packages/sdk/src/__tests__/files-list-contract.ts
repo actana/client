@@ -1,4 +1,4 @@
-// The listing contract, driven across the seam: `project.files.list()` from
+// The listing contract, driven across the seam: `core.files.list()` from
 // `@actana/sdk` against the Core's own `createCoreFilesRequestHandler`, in one
 // process, over a real socket (#218).
 //
@@ -66,10 +66,10 @@ export function describeFilesListContract(): void {
 
   async function listing(
     core: CoreClient,
-    opts: Parameters<ReturnType<CoreClient["project"]>["files"]["list"]>[0] = {},
+    opts: Parameters<CoreClient["files"]["list"]>[0] = {},
   ): Promise<CoreFileEntry[]> {
     const entries: CoreFileEntry[] = [];
-    for await (const entry of core.project(rig!.projectId).files.list(opts)) entries.push(entry);
+    for await (const entry of core.files.list(opts)) entries.push(entry);
     return entries;
   }
 
@@ -96,7 +96,7 @@ export function describeFilesListContract(): void {
       });
 
       // The old failure had no exception in it, which is why it survived
-      // review: `?list=1` was a valid *read* of the Project root, so the Core
+      // review: `?list=1` was a valid *read* of the home, so the Core
       // streamed a tar and this reader fed it to the NDJSON line parser. Naming
       // the field the tar could never have carried is what makes this
       // assertion about the URL rather than about the parser.
@@ -130,10 +130,9 @@ export function describeFilesListContract(): void {
       // expensive one. That is only true while the two URLs actually differ, so
       // it is pinned here rather than left to the comment that argues for it.
       const core = await open({ "src/b.txt": "bb" });
-      const project = core.project(rig!.projectId);
 
       const entries = await listing(core, { path: "src" });
-      const download = await project.files.download({ path: "src" });
+      const download = await core.files.download({ path: "src" });
       await download.stream.cancel();
 
       expect(entries.map((entry) => entry.path)).toEqual(["src/b.txt"]);
@@ -172,7 +171,6 @@ export function describeFilesListContract(): void {
       const core = await open({ "a.txt": "a" });
 
       const failure = await core
-        .project(rig!.projectId)
         .files.list({ path: "nope" })
         .next()
         .then(() => null, (err: unknown) => err);

@@ -1,4 +1,4 @@
-// `project.files.list / upload / download` against a real Core file surface
+// `core.files.list / upload / download` against a real Core file surface
 // (#167, F12).
 //
 // Every assertion here goes over a real loopback socket to the Core's own route
@@ -61,10 +61,9 @@ function sha256(content: string): string {
 describe("upload", () => {
   it("takes a stream and reports each entry as NDJSON progress", async () => {
     const core = await open();
-    const project = core.project(rig!.projectId);
 
     const lines = await drain(
-      project.files.upload({
+      core.files.upload({
         path: "notes.txt",
         // An async iterable of chunks — which is what a Node `Readable` is, so
         // `fs.createReadStream(…)` is accepted by the same signature with no
@@ -94,10 +93,9 @@ describe("upload", () => {
 
   it("names an overwrite as `overwritten` rather than leaving it to be inferred", async () => {
     const core = await open({ seed: { "notes.txt": "old" } });
-    const project = core.project(rig!.projectId);
 
     const lines = await drain(
-      project.files.upload({ path: "notes.txt", body: oneChunk("new") }),
+      core.files.upload({ path: "notes.txt", body: oneChunk("new") }),
     );
 
     // The done-when names this field by name: *every* overwrite is reported.
@@ -112,12 +110,11 @@ describe("upload", () => {
     const source = fs.mkdtempSync(path.join(rig!.root, "..", "src-"));
     writeTree(source, { "keep.txt": "replaced", "new.txt": "fresh", "deep/nested.txt": "down" });
 
-    const project = core.project(rig!.projectId);
     const lines = await drain(
       // A folder crosses as one streamed tar (ADR 0029). The SDK does not build
       // it — packing lives on the side with the files — so the caller hands in
       // a tar stream and says so, which is exactly what this does.
-      project.files.upload({ path: "vendor", kind: "tar", body: packDirectory(source) }),
+      core.files.upload({ path: "vendor", kind: "tar", body: packDirectory(source) }),
     );
     fs.rmSync(source, { recursive: true, force: true });
 
@@ -126,7 +123,7 @@ describe("upload", () => {
     expect(byPath.get("vendor/keep.txt")).toMatchObject({ result: "overwritten" });
     expect(byPath.get("vendor/new.txt")).toMatchObject({ result: "written" });
     expect(byPath.get("vendor/deep/nested.txt")).toMatchObject({ result: "written" });
-    // Project-relative, not relative to the folder unpacked into — the string
+    // Home-relative, not relative to the folder unpacked into — the string
     // that goes straight back to `download`.
     for (const entry of entries) expect(entry.path.startsWith("vendor/")).toBe(true);
     expect(lines.at(-1)).toMatchObject({ type: "done" });
@@ -134,32 +131,29 @@ describe("upload", () => {
 
   it("carries the executable bit and the mtime across", async () => {
     const core = await open();
-    const project = core.project(rig!.projectId);
     const mtime = 1_700_000_000_000;
 
     const lines = await drain(
-      project.files.upload({ path: "run.sh", body: oneChunk("#!/bin/sh\n"), mode: 0o755, mtime }),
+      core.files.upload({ path: "run.sh", body: oneChunk("#!/bin/sh\n"), mode: 0o755, mtime }),
     );
 
     expect(lines[0]).toMatchObject({ mode: 0o755, mtime });
     expect(fs.statSync(path.join(rig!.root, "run.sh")).mode & 0o777).toBe(0o755);
   });
 
-  it("refuses a path that leaves the Project, and writes nothing", async () => {
+  it("refuses a path that leaves the home, and writes nothing", async () => {
     const core = await open();
-    const project = core.project(rig!.projectId);
 
     await expect(
-      drain(project.files.upload({ path: "../escape.txt", body: oneChunk("nope") })),
+      drain(core.files.upload({ path: "../escape.txt", body: oneChunk("nope") })),
     ).rejects.toThrow(CoreFilesRequestError);
     expect(fs.existsSync(path.join(rig!.root, "..", "escape.txt"))).toBe(false);
   });
 
   it("sends nothing until the iterable is consumed", async () => {
     const core = await open();
-    const project = core.project(rig!.projectId);
 
-    const progress = project.files.upload({ path: "lazy.txt", body: oneChunk("x") });
+    const progress = core.files.upload({ path: "lazy.txt", body: oneChunk("x") });
     // Constructed, not started. This is the property that makes a progress
     // stream honest: nothing is buffered on the caller's behalf, so nothing has
     // happened yet either.
@@ -173,9 +167,8 @@ describe("upload", () => {
 describe("download", () => {
   it("returns a stream and the metadata the Core already had", async () => {
     const core = await open({ seed: { "notes.txt": { content: "hello world", mode: 0o600 } } });
-    const project = core.project(rig!.projectId);
 
-    const file = await project.files.download({ path: "notes.txt" });
+    const file = await core.files.download({ path: "notes.txt" });
 
     expect(file.kind).toBe("file");
     expect(file.size).toBe(11);
@@ -190,9 +183,8 @@ describe("download", () => {
 
   it("hands a folder back as one streamed tar", async () => {
     const core = await open({ seed: { "src/a.txt": "a", "src/b.txt": "b" } });
-    const project = core.project(rig!.projectId);
 
-    const folder = await project.files.download({ path: "src" });
+    const folder = await core.files.download({ path: "src" });
 
     expect(folder.kind).toBe("tar");
     const tar = await collect(folder.stream);
@@ -205,21 +197,11 @@ describe("download", () => {
 
   it("refuses a path that is not there, with the Core's own code", async () => {
     const core = await open();
-    const project = core.project(rig!.projectId);
 
-    await expect(project.files.download({ path: "missing.txt" })).rejects.toMatchObject({
+    await expect(core.files.download({ path: "missing.txt" })).rejects.toMatchObject({
       name: "CoreFilesRequestError",
       status: 404,
       code: "not-found",
-    });
-  });
-
-  it("refuses an unknown Project by name", async () => {
-    const core = await open();
-
-    await expect(core.project("proj_nope").files.download({ path: "a" })).rejects.toMatchObject({
-      status: 404,
-      code: "project-not-found",
     });
   });
 });
@@ -236,10 +218,9 @@ describe("list", () => {
     const core = await open({
       seed: { "a.txt": "aaa", "src/b.txt": "bb", "src/deep/c.txt": "c" },
     });
-    const project = core.project(rig!.projectId);
 
     const entries = [];
-    for await (const entry of project.files.list()) entries.push(entry);
+    for await (const entry of core.files.list()) entries.push(entry);
 
     expect(entries.map((entry) => entry.path).sort()).toEqual([
       "a.txt",
@@ -262,10 +243,9 @@ describe("list", () => {
 
   it("computes digests when they are asked for", async () => {
     const core = await open({ seed: { "a.txt": "aaa" } });
-    const project = core.project(rig!.projectId);
 
     const entries = [];
-    for await (const entry of project.files.list({ sha256: true })) entries.push(entry);
+    for await (const entry of core.files.list({ sha256: true })) entries.push(entry);
 
     expect(entries).toHaveLength(1);
     expect(entries[0]!.sha256).toBe(sha256("aaa"));
@@ -275,19 +255,17 @@ describe("list", () => {
     const core = await open({
       seed: { "a.txt": "a", "src/b.txt": "b", "src/deep/c.txt": "c" },
     });
-    const project = core.project(rig!.projectId);
 
     const entries = [];
-    for await (const entry of project.files.list({ path: "src", depth: 1 })) entries.push(entry);
+    for await (const entry of core.files.list({ path: "src", depth: 1 })) entries.push(entry);
 
     expect(entries.map((entry) => entry.path).sort()).toEqual(["src/b.txt", "src/deep"]);
   });
 
   it("sends nothing until the iterable is consumed", async () => {
     const core = await open({ seed: { "a.txt": "a" } });
-    const project = core.project(rig!.projectId);
 
-    const listing = project.files.list();
+    const listing = core.files.list();
     expect(rig!.requests).toHaveLength(0);
 
     await listing.next();
@@ -299,14 +277,13 @@ describe("list", () => {
 describe("the gate", () => {
   it("is checked on every call, so a handle taken while connected stops working when the link drops", async () => {
     const core = await open({ seed: { "a.txt": "a" } });
-    const project = core.project(rig!.projectId);
-    expect((await project.files.download({ path: "a.txt" })).size).toBe(1);
+    expect((await core.files.download({ path: "a.txt" })).size).toBe(1);
 
     core.close();
 
     // Not a stale `true` remembered from construction: the capability belongs
     // to the *current* connection, and there is not one.
-    await expect(project.files.download({ path: "a.txt" })).rejects.toThrow(
+    await expect(core.files.download({ path: "a.txt" })).rejects.toThrow(
       CoreFilesUnavailableError,
     );
   });
