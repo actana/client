@@ -11,6 +11,8 @@
 // real `PtyCoreLinkServer`, proving the frames are the ones a Core answers.
 
 import { describe, it, expect, afterEach } from "vitest";
+import { fakeShared, type FakeShared } from "./shared-fixture.ts";
+import { appendPromptBlock, buildPromptBlock } from "../core/session-report.ts";
 import {
   fakeSessionGateway,
   fakeStartedSession,
@@ -18,12 +20,10 @@ import {
   registerCore,
   type CliFixture,
 } from "./cli-harness.ts";
-import {
-  SessionGatewayError,
-  type SessionRow,
-  type StartedSession,
-} from "../core/session-gateway.ts";
+import { SessionGatewayError, type SessionRow } from "../core/session-gateway.ts";
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "../kit/exit-codes.ts";
+
+const END = "ACT-REPORT-END";
 
 let fixture: CliFixture | null = null;
 function cli(): CliFixture {
@@ -267,11 +267,13 @@ describe("actana session ls", () => {
       resume: async () => fakeStartedSession(),
       logs: async () => ({ sessionId: "session_1", ptyId: "pty_1", screen: "a screen", raw: "raw" }),
       send: async () => true,
-      wait: async () => fakeStartedSession(),
-      sendAndWait: async () => fakeStartedSession(),
       kill: async () => ({ ptyId: "pty_1", killed: true }),
       list: async () => [row()],
     });
+    const shared = fakeShared();
+    shared.folder().seed("sessions/session_1/report-1.md", `done\n${END}\n`);
+    shared.folder().seed("sessions/session_1/report-2.md", `done\n${END}\n`);
+    shared.folder().seed("sessions/session_1/report-3.md", `done\n${END}\n`);
     for (const argv of [
       ["session", "start", "go", "--json", "--verbose"],
       ["session", "resume", "session_1", "--json", "--verbose"],
@@ -280,9 +282,9 @@ describe("actana session ls", () => {
       ["session", "kill", "session_1", "--json", "--verbose"],
       ["session", "ls", "--json", "--verbose"],
       ["session", "wait", "session_1", "--json", "--verbose"],
-      ["session", "send", "session_1", "hi", "--wait", "--json", "--verbose"],
+      ["session", "send", "session_1", "hi", "--wait", "--turn", "3", "--json", "--verbose"],
     ]) {
-      const run = await cli().run(argv, { sessions: gateway });
+      const run = await cli().run(argv, { sessions: gateway, shared: shared.open });
       const where = argv.join(" ");
       expect(run.code, where).toBe(EXIT_OK);
       const stdout = run.out.join("\n");
@@ -488,42 +490,193 @@ describe("actana session logs", () => {
   });
 });
 
-describe("actana session wait, and send --wait (#289)", () => {
-  /** An attached Session, settling on whatever the test says. */
-  function attached(overrides: Partial<StartedSession> = {}): StartedSession {
-    return fakeStartedSession({
-      // The three answers only a spawn gives. An attach did not spawn.
-      command: null,
-      reportsTurnStart: null,
-      ...overrides,
+describe("actana session wait, and send --wait (client #8): the report file settles a turn", () => {
+  const REPORT_1 = "sessions/session_1/report-1.md";
+  const REPORT_2 = "sessions/session_1/report-2.md";
+  const FINISHED = `all done\n${END}\n`;
+
+  /** A Core with one Session, whatever its status says, and a Shared folder that polls fast. */
+  function world(status = "running") {
+    const shared = fakeShared({ pollIntervalMs: 2 });
+    const events: string[] = [];
+    const gateway = fakeSessionGateway({
+      list: async () => [row({ status, live: status === "running" })],
+      send: async (_id, text, opts) => {
+        events.push(`send ${JSON.stringify(text)} enter=${opts?.enter === true}`);
+        return true;
+      },
     });
+    return { shared, events, gateway, folder: () => shared.folder() };
   }
 
-  it("is a verb of its own, and takes --wait-timeout without a --wait beside it", async () => {
+  /** What the fake Shared folder was asked, minus the polling noise. */
+  const reads = (w: ReturnType<typeof world>) => w.folder().calls.filter((c) => c.startsWith("get "));
+
+  it("settles on a report that landed before the wait started, and prints its path", async () => {
     await withRegisteredCore();
-    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "90"], {
-      sessions: fakeSessionGateway({
-        wait: async () => attached({ wait: async () => ({ status: "finished", exited: false }) }),
-      }),
-    });
+    const w = world();
+    w.folder().seed(REPORT_1, FINISHED);
+
+    const run = await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
-    // The id on stdout, as every other verb leaves it, so `$(…)` still works.
-    expect(run.out).toEqual(["session_1"]);
-    expect(run.err.join("\n")).toContain("finished");
+    expect(run.out).toEqual([REPORT_1]);
+    expect(run.err.join("\n")).toContain("Report landed: sessions/session_1/report-1.md");
+    expect(reads(w)).toEqual([`get ${REPORT_1}`]);
   });
 
-  it("refuses the flags it does not take, `--wait` included", async () => {
+  it("settles when the report lands after the wait started, reading it only once it changed", async () => {
+    await withRegisteredCore();
+    const w = world();
+    setTimeout(() => void w.folder().put(REPORT_1, FINISHED), 25);
+
+    const run = await cli().run(["session", "wait", "session_1", "--json"], { sessions: w.gateway, shared: w.shared.open });
+
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(JSON.parse(run.out.join("\n"))).toEqual({
+      sessionId: "session_1",
+      turn: 1,
+      reportPath: REPORT_1,
+      waited: true,
+      settled: true,
+      report: FINISHED,
+    });
+    // One look when it began (nothing there) and one when the watcher said it changed: not a poll of the file.
+    expect(reads(w)).toEqual([`get ${REPORT_1}`, `get ${REPORT_1}`]);
+    expect(w.folder().calls.filter((c) => c.startsWith("watch")).length).toBeGreaterThan(1);
+  });
+
+  it("does not settle on a report without its end marker, and settles when it is finished", async () => {
+    await withRegisteredCore();
+    const w = world();
+    setTimeout(() => void w.folder().put(REPORT_1, `halfway\n${END} is what I will write\n`), 15);
+    setTimeout(() => void w.folder().put(REPORT_1, `halfway\n${END}\nbut then more\n`), 40);
+    const finishedAt: number[] = [];
+    setTimeout(() => {
+      finishedAt.push(Date.now());
+      void w.folder().put(REPORT_1, FINISHED);
+    }, 70);
+
+    const run = await cli().run(["session", "wait", "session_1", "--json"], { sessions: w.gateway, shared: w.shared.open });
+
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(JSON.parse(run.out.join("\n")).report).toBe(FINISHED);
+    expect(finishedAt).toHaveLength(1);
+  });
+
+  it.each(["finished", "needs-input", "interrupted", "terminated", "disconnected", "ready"])(
+    "is not settled by the Session's status (%s): with no report it runs out its own deadline",
+    async (status) => {
+      await withRegisteredCore();
+      const w = world(status);
+
+      const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "0.06", "--json"], {
+        sessions: w.gateway,
+        shared: w.shared.open,
+      });
+
+      expect(run.code).toBe(EXIT_FAILURE);
+      const doc = JSON.parse(run.out.join("\n")) as Record<string, unknown>;
+      expect(doc.settled).toBeUndefined();
+      expect(String(doc.error)).toContain("did not appear with its end marker");
+      expect(run.err.join("\n")).toContain("gave up after 0.06 seconds");
+      expect(run.err.join("\n")).toContain("The Session is still running on the Core");
+      // And the screen's `waitForTurnEnd` was never asked: the double has no wait to call.
+    },
+  );
+
+  it("waits for the report of the turn it is told, and a stale earlier report does not settle it", async () => {
+    await withRegisteredCore();
+    const w = world();
+    w.folder().seed(REPORT_1, FINISHED);
+
+    const stale = await cli().run(["session", "wait", "session_1", "--turn", "2", "--wait-timeout", "0.05"], {
+      sessions: w.gateway,
+      shared: w.shared.open,
+    });
+    expect(stale.code).toBe(EXIT_FAILURE);
+    expect(stale.err.join("\n")).toContain("sessions/session_1/report-2.md did not appear");
+
+    setTimeout(() => void w.folder().put(REPORT_2, FINISHED), 20);
+    const fresh = await cli().run(["session", "wait", "session_1", "--turn", "2"], {
+      sessions: w.gateway,
+      shared: w.shared.open,
+    });
+    expect(fresh.code, fresh.err.join("\n")).toBe(EXIT_OK);
+    expect(fresh.out).toEqual([REPORT_2]);
+  });
+
+  it("without --turn means the latest report there is, or turn 1", async () => {
+    await withRegisteredCore();
+    const w = world();
+    w.folder().seed(REPORT_1, FINISHED);
+    w.folder().seed(REPORT_2, FINISHED);
+    w.folder().seed("sessions/session_1/notes.md", "not a report");
+
+    const latest = await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+    expect(latest.out).toEqual([REPORT_2]);
+
+    const none = world();
+    const first = await cli().run(["session", "wait", "session_1", "--wait-timeout", "0.04"], {
+      sessions: none.gateway,
+      shared: none.shared.open,
+    });
+    expect(first.err.join("\n")).toContain("sessions/session_1/report-1.md did not appear");
+  });
+
+  it("refuses a Session this Core does not have, instead of waiting for a file nothing will write", async () => {
+    await withRegisteredCore();
+    const w = world();
+
+    const run = await cli().run(["session", "wait", "session_typo"], { sessions: w.gateway, shared: w.shared.open });
+
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(run.err.join("\n")).toContain("this Core has no session session_typo");
+    expect(w.shared.opened).toEqual([]);
+  });
+
+  it("says so, on stderr and with a failing exit code, when the Shared folder cannot be reached", async () => {
+    await withRegisteredCore();
+    const w = world();
+
+    const run = await cli().run(["session", "wait", "session_1", "--json"], {
+      sessions: w.gateway,
+      shared: async () => {
+        throw new Error("no shared capability");
+      },
+    });
+
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(run.err.join("\n")).toContain("could not reach the Shared folder");
+    expect(run.err.join("\n")).toContain("no shared capability");
+    expect(JSON.parse(run.out.join("\n")).error).toContain("no shared capability");
+  });
+
+  it("closes the Shared handle it opened", async () => {
+    await withRegisteredCore();
+    const w = world();
+    w.folder().seed(REPORT_1, FINISHED);
+
+    await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+
+    expect(w.shared.closed.count).toBe(1);
+  });
+
+  it("refuses the flags it does not take, `--wait` included, and a bad --turn", async () => {
     await withRegisteredCore();
     for (const flag of ["--wait", "--enter", "--harness", "--raw"]) {
       const argv = flag === "--harness" ? ["--harness", "codex"] : [flag];
-      const run = await cli().run(["session", "wait", "session_1", ...argv], {
-        sessions: fakeSessionGateway(),
-      });
+      const run = await cli().run(["session", "wait", "session_1", ...argv], { sessions: fakeSessionGateway() });
       // `--wait` is refused rather than accepted as a synonym for the verb's
       // own name: a flag that means nothing here would be a flag somebody
       // believed they set.
       expect(run.code, `${flag} was not refused`).toBe(EXIT_USAGE);
       expect(run.err.join("\n")).toContain(`${flag} does not apply here`);
+    }
+    for (const turn of ["0", "-1", "1.5", "two", "01"]) {
+      const run = await cli().run(["session", "wait", "session_1", "--turn", turn], { sessions: fakeSessionGateway() });
+      expect(run.code, turn).toBe(EXIT_USAGE);
+      expect(run.err.join("\n"), turn).toContain("--turn wants a turn number from 1");
     }
   });
 
@@ -533,107 +686,107 @@ describe("actana session wait, and send --wait (#289)", () => {
     expect(bare.code).toBe(EXIT_USAGE);
     expect(bare.err.join("\n")).toContain("a session id is required");
 
-    const extra = await cli().run(["session", "wait", "session_1", "session_2"], {
-      sessions: fakeSessionGateway(),
-    });
+    const extra = await cli().run(["session", "wait", "session_1", "session_2"], { sessions: fakeSessionGateway() });
     expect(extra.code).toBe(EXIT_USAGE);
     expect(extra.err.join("\n")).toContain('unexpected argument "session_2"');
   });
 
-  it("says a Session with no harness running has nothing to wait on", async () => {
-    await withRegisteredCore();
-    const run = await cli().run(["session", "wait", "session_1"], {
-      sessions: fakeSessionGateway({
-        wait: async () => {
-          throw new SessionGatewayError(
-            "not-running",
-            "session session_1 has no harness running — there is nothing to attach a wait to",
-          );
+  describe("send --wait", () => {
+    it("settles on the turn's report even when it landed while the text was being sent", async () => {
+      await withRegisteredCore();
+      const w = world();
+      // The fastest harness there is: its report exists by the time the write returns.
+      const gateway = fakeSessionGateway({
+        list: async () => [row()],
+        send: async (_id, text, opts) => {
+          w.events.push(`send ${text}`);
+          void opts;
+          await w.folder().put(REPORT_2, FINISHED);
+          return true;
         },
-      }),
-    });
-    expect(run.code).toBe(EXIT_FAILURE);
-    expect(run.err.join("\n")).toContain("no harness running");
-  });
+      });
 
-  it("accepts `send --wait`, which was a usage error", async () => {
-    await withRegisteredCore();
-    const sent: Array<{ text: string; enter: boolean | undefined }> = [];
-    const run = await cli().run(["session", "send", "session_1", "carry", "on", "--wait"], {
-      sessions: fakeSessionGateway({
-        sendAndWait: async (_sessionId, text, opts) => {
-          sent.push({ text, enter: opts?.enter });
-          return attached({ wait: async () => ({ status: "needs-input", exited: false }) });
+      const run = await cli().run(["session", "send", "session_1", "carry", "on", "--enter", "--wait", "--json"], {
+        sessions: gateway,
+        shared: w.shared.open,
+      });
+
+      expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+      expect(JSON.parse(run.out.join("\n"))).toMatchObject({ turn: 2, reportPath: REPORT_2, settled: true });
+    });
+
+    it("takes the Shared cursor before it writes, and then waits on the watcher", async () => {
+      await withRegisteredCore();
+      const w = world();
+      const order: string[] = [];
+      const folder = w.folder();
+      const watch = folder.watch.bind(folder);
+      folder.watch = async (since) => {
+        order.push(since === undefined ? "cursor" : "watch");
+        return watch(since);
+      };
+      const gateway = fakeSessionGateway({
+        send: async () => {
+          order.push("write");
+          setTimeout(() => void folder.put(REPORT_2, FINISHED), 15);
+          return true;
         },
-      }),
-    });
-    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
-    // One call for the write and the wait — the gateway resolves the PTY once
-    // and there is no window between the delivery and the start of the wait.
-    expect(sent).toEqual([{ text: "carry on", enter: false }]);
-    expect(run.err.join("\n")).toContain("Sent 8 characters");
-    expect(run.err.join("\n")).toContain("needs-input");
-  });
+      });
 
-  it("prints the same object `start --wait --json` prints", async () => {
-    await withRegisteredCore();
-    const outcome = { status: "finished", exited: true, exitCode: 0 };
+      const run = await cli().run(["session", "send", "session_1", "go", "--wait"], { sessions: gateway, shared: w.shared.open });
 
-    const started = await cli().run(["session", "start", "go", "--wait", "--json"], {
-      sessions: fakeSessionGateway({
-        start: async () => fakeStartedSession({ wait: async () => outcome }),
-      }),
-    });
-    const sent = await cli().run(["session", "send", "session_1", "go on", "--wait", "--json"], {
-      sessions: fakeSessionGateway({
-        sendAndWait: async () => attached({ wait: async () => outcome }),
-      }),
-    });
-    const waited = await cli().run(["session", "wait", "session_1", "--json"], {
-      sessions: fakeSessionGateway({ wait: async () => attached({ wait: async () => outcome }) }),
+      expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+      expect(order.indexOf("cursor")).toBeLessThan(order.indexOf("write"));
+      expect(order.indexOf("write")).toBeLessThan(order.indexOf("watch"));
     });
 
-    expect(started.code, started.err.join("\n")).toBe(EXIT_OK);
-    expect(sent.code, sent.err.join("\n")).toBe(EXIT_OK);
-    expect(waited.code, waited.err.join("\n")).toBe(EXIT_OK);
+    it("is not settled by a status either: no report, it gives up at its deadline", async () => {
+      await withRegisteredCore();
+      const w = world("finished");
 
-    const keys = (run: { out: string[] }) =>
-      Object.keys(JSON.parse(run.out.join("\n")) as Record<string, unknown>).sort();
-    // One result shape across the three commands, so a caller's parser does not
-    // fork on which verb produced the document.
-    expect(keys(sent)).toEqual(keys(started));
-    expect(keys(waited)).toEqual(keys(started));
-    expect(keys(started)).toContain("screen");
-    expect(keys(started)).toContain("waited");
+      const run = await cli().run(
+        ["session", "send", "session_1", "go on", "--wait", "--wait-timeout", "0.05", "--json"],
+        { sessions: w.gateway, shared: w.shared.open },
+      );
 
-    // And the fields an attach cannot answer are `null` rather than invented.
-    const attachedDoc = JSON.parse(sent.out.join("\n")) as Record<string, unknown>;
-    expect(attachedDoc.command).toBeNull();
-    expect(attachedDoc.reportsTurnStart).toBeNull();
-  });
+      expect(run.code).toBe(EXIT_FAILURE);
+      const doc = JSON.parse(run.out.join("\n")) as Record<string, unknown>;
+      expect(doc).toMatchObject({ waited: true, turn: 2, reportPath: REPORT_2 });
+      expect(String(doc.error)).toContain("did not appear with its end marker");
+      expect(doc.status).toBeUndefined();
+      expect(run.err.join("\n")).toContain("Sent 5 characters and the report block");
+    });
 
-  it("reports a timeout as this side giving up, never as a status", async () => {
-    await withRegisteredCore();
-    const run = await cli().run(
-      ["session", "send", "session_1", "go on", "--wait", "--wait-timeout", "1", "--json"],
-      {
-        sessions: fakeSessionGateway({
-          sendAndWait: async () =>
-            attached({
-              wait: async () => {
-                throw new Error("session session_1 was still running after 1000ms");
-              },
-            }),
-        }),
-      },
-    );
-    // The existing failure code, not a new one: `exit-codes.ts` belongs to #285
-    // and a wait timeout has always been `EXIT_FAILURE` for `start --wait`.
-    expect(run.code).toBe(EXIT_FAILURE);
-    const payload = JSON.parse(run.out.join("\n")) as Record<string, unknown>;
-    expect(payload.waited).toBe(true);
-    expect(payload.error).toContain("was still running");
-    expect(payload.status).toBeUndefined();
+    it("does not wait, or print a document, when the Core declined the write", async () => {
+      await withRegisteredCore();
+      const w = world();
+
+      const run = await cli().run(["session", "send", "session_1", "go", "--wait", "--wait-timeout", "5"], {
+        sessions: fakeSessionGateway({ send: async () => false }),
+        shared: w.shared.open,
+      });
+
+      expect(run.code).toBe(EXIT_FAILURE);
+      expect(run.err.join("\n")).toContain("did not accept the write");
+      expect(w.folder().calls.filter((c) => c.startsWith("get "))).toEqual([]);
+    });
+
+    it("needs a text, or a --turn, to wait for: a bare carriage return starts no report", async () => {
+      await withRegisteredCore();
+      const w = world();
+
+      const run = await cli().run(["session", "send", "session_1", "--enter", "--wait"], { sessions: w.gateway, shared: w.shared.open });
+      expect(run.code).toBe(EXIT_USAGE);
+      expect(run.err.join("\n")).toContain("a bare carriage return starts no report");
+
+      w.folder().seed(REPORT_1, FINISHED);
+      const named = await cli().run(["session", "send", "session_1", "--enter", "--wait", "--turn", "1"], {
+        sessions: w.gateway,
+        shared: w.shared.open,
+      });
+      expect(named.code, named.err.join("\n")).toBe(EXIT_OK);
+      expect(w.events).toEqual(["send \"\" enter=true"]);
+    });
   });
 
   it("refuses --wait-timeout on a send that is not waiting", async () => {
@@ -645,54 +798,121 @@ describe("actana session wait, and send --wait (#289)", () => {
     expect(run.err.join("\n")).toContain("only means something with --wait");
   });
 
-  it("states the running-turn limit in the help text", async () => {
-    // #289 C: a keystroke into a busy harness is not a new turn, so a send into
-    // one resolves on *that* turn's end — possibly before the harness has read
-    // the text. It is stated rather than left to be discovered.
-    const help = await cli().run(["session", "--help"]);
-    expect(help.out.join("\n")).toContain("actana session wait <session>");
-    expect(help.out.join("\n")).toContain("resolves on that turn's end");
-    expect(help.out.join("\n")).toContain("this side gave up");
+  it("documents the contract in the help, and not the status wait", async () => {
+    const help = (await cli().run(["session", "--help"])).out.join("\n");
+    expect(help).toContain("sessions/<session-id>/report-<turn>.md");
+    expect(help).toContain("ACT-REPORT-END");
+    expect(help).toContain("through the Shared watcher");
+    expect(help).toContain("this side gave up");
+    expect(help).not.toContain("resolves on that turn's end");
+    expect(help).not.toContain("the Core stamps the delivery");
   });
 });
 
 describe("actana session send", () => {
-  it("writes exactly what it was given, once", async () => {
+  /** The Shared folder every send needs, to number its turn from. */
+  function sharedFolder(seed: Record<string, string> = {}): FakeShared {
+    const shared = fakeShared();
+    for (const [path, body] of Object.entries(seed)) shared.folder().seed(path, body);
+    return shared;
+  }
+  const sendInto = (writes: Array<{ text: string; enter: boolean | undefined }>) =>
+    fakeSessionGateway({
+      send: async (_sessionId, text, opts) => {
+        writes.push({ text, enter: opts?.enter });
+        return true;
+      },
+    });
+
+  it("writes the text and the standard block, once, as turn 2 when no report is there yet", async () => {
     await withRegisteredCore();
-    const writes: string[] = [];
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
     const run = await cli().run(["session", "send", "session_1", "yes", "please"], {
-      sessions: fakeSessionGateway({
-        send: async (_sessionId, text) => {
-          writes.push(text);
-          return true;
-        },
-      }),
+      sessions: sendInto(writes),
+      shared: sharedFolder().open,
     });
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
-    // Joined the way a shell already joined them, and nothing appended: no
+    // Joined the way a shell already joined them, then the block of this turn: one write, no
     // carriage return, no second write, no timer (ADR 0026).
-    expect(writes).toEqual(["yes please"]);
+    expect(writes).toEqual([{ text: `yes please ${buildPromptBlock({ sessionId: "session_1", turn: 2 })}`, enter: false }]);
+    expect(writes[0]!.text.match(/\[Actana standard block/g)).toHaveLength(1);
     expect(run.out).toEqual([]);
+    expect(run.err.join("\n")).toContain("Sent 10 characters and the report block to session session_1.");
+    expect(run.err.join("\n")).toContain("Turn 2: the report goes to sessions/session_1/report-2.md");
+    expect(run.err.join("\n")).toContain("session wait session_1 --turn 2");
+  });
+
+  it("numbers the turn after the reports already there", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const run = await cli().run(["session", "send", "session_1", "next", "--json"], {
+      sessions: sendInto(writes),
+      shared: sharedFolder({
+        "sessions/session_1/report-1.md": `a\n${END}\n`,
+        "sessions/session_1/report-2.md": `b\n${END}\n`,
+        "sessions/session_1/notes.md": "x",
+        "sessions/other/report-9.md": "another Session",
+      }).open,
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(writes[0]!.text).toContain("~/shared/sessions/session_1/report-3.md");
+    expect(JSON.parse(run.out.join("\n"))).toEqual({
+      sessionId: "session_1",
+      characters: 4,
+      enter: false,
+      delivered: true,
+      turn: 3,
+      reportPath: "sessions/session_1/report-3.md",
+    });
+  });
+
+  it("takes the turn from --turn when it is given", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    await cli().run(["session", "send", "session_1", "again", "--turn", "7"], {
+      sessions: sendInto(writes),
+      shared: sharedFolder().open,
+    });
+    expect(writes[0]!.text).toContain("~/shared/sessions/session_1/report-7.md");
+  });
+
+  it("does not stack a second block on a text that already carries one", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const carried = appendPromptBlock("redo it", { sessionId: "session_1", turn: 5 });
+    await cli().run(["session", "send", "session_1", carried], { sessions: sendInto(writes), shared: sharedFolder().open });
+    expect(writes[0]!.text).toBe(carried);
+  });
+
+  it("writes nothing when it cannot number the turn, and says why on stderr", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const run = await cli().run(["session", "send", "session_1", "hello"], {
+      sessions: sendInto(writes),
+      shared: async () => {
+        throw new Error("this Core keeps no Shared folder");
+      },
+    });
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(writes).toEqual([]);
+    expect(run.err.join("\n")).toContain("could not reach the Shared folder");
+    expect(run.err.join("\n")).toContain("this Core keeps no Shared folder");
   });
 
   it("asks for the return in the same call, so the PTY is resolved once", async () => {
     await withRegisteredCore();
     const calls: Array<{ text: string; enter: boolean | undefined }> = [];
     const run = await cli().run(["session", "send", "session_1", "2", "--enter", "--json"], {
-      sessions: fakeSessionGateway({
-        send: async (_sessionId, text, opts) => {
-          calls.push({ text, enter: opts?.enter });
-          return true;
-        },
-      }),
+      sessions: sendInto(calls),
+      shared: sharedFolder().open,
     });
     expect(run.code).toBe(EXIT_OK);
     // One call, not two: the gateway resolves the PTY once and writes both, so
     // there is no window in which the text lands and the return goes nowhere.
     // That the return is a *separate write* to that PTY is asserted against a
     // real Core in `in-process-core-session.test.ts`.
-    expect(calls).toEqual([{ text: "2", enter: true }]);
-    expect(JSON.parse(run.out.join("\n"))).toMatchObject({ enter: true, delivered: true });
+    expect(calls).toEqual([{ text: `2 ${buildPromptBlock({ sessionId: "session_1", turn: 2 })}`, enter: true }]);
+    expect(JSON.parse(run.out.join("\n"))).toMatchObject({ enter: true, delivered: true, turn: 2 });
   });
 
   it("refuses empty stdin rather than reporting a delivery it never made", async () => {
@@ -707,7 +927,7 @@ describe("actana session send", () => {
     expect(run.err.join("\n")).toContain("stdin was empty");
   });
 
-  it("still sends a bare carriage return when stdin is empty and --enter was asked for", async () => {
+  it("still sends a bare carriage return, with no block and no Shared folder, when stdin is empty and --enter was asked for", async () => {
     await withRegisteredCore();
     const calls: Array<{ text: string; enter: boolean | undefined }> = [];
     const run = await cli().run(["session", "send", "session_1", "-", "--enter"], {
@@ -727,6 +947,7 @@ describe("actana session send", () => {
     await withRegisteredCore();
     const run = await cli().run(["session", "send", "session_1", "hello"], {
       sessions: fakeSessionGateway({ send: async () => false }),
+      shared: sharedFolder().open,
     });
     expect(run.code).toBe(EXIT_FAILURE);
     expect(run.err.join("\n")).toContain("did not accept the write");
@@ -796,7 +1017,7 @@ describe("--json means only JSON on stdout", () => {
       ["session", "send", "session_1", "hi", "--json", "--verbose"],
       ["session", "kill", "session_1", "--json", "--verbose"],
     ]) {
-      const run = await cli().run(argv, { sessions: gateway });
+      const run = await cli().run(argv, { sessions: gateway, shared: fakeShared().open });
       expect(run.code, argv.join(" ")).toBe(EXIT_FAILURE);
       const parsed = JSON.parse(run.out.join("\n"));
       expect(parsed.error, argv.join(" ")).toBe("the Core refused");

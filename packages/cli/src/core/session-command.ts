@@ -4,8 +4,8 @@
 //   actana session ls                        what is running, and what settled
 //   actana session logs <session>            the transcript, rendered
 //   actana session resume <session> [prompt] pick a conversation back up
-//   actana session send <session> <text>     type into a running Session
-//   actana session wait <session>            block until it settles (#289)
+//   actana session send <session> <text>     type into a running Session, with the report block
+//   actana session wait <session>            block until its report lands in the Shared folder (#8)
 //   actana session kill <session>            stop the harness, whoever started it
 //   actana session attach <session>          take the terminal (#163)
 //
@@ -22,10 +22,18 @@
 // the SDK, which hands it to the Core, which waits for the harness's TUI to
 // settle, answers whatever dialog it opened, and writes the prompt and the
 // carriage return. Nothing in this package waits, retries, or presses Enter on
-// a timer — `send` writes exactly the bytes it was given and appends nothing.
+// a timer. `send` is a raw write too, with one addition (client #8): the standard
+// block the Core appends to a starting prompt, because a follow-up turn does not
+// go through the Core's delivery and the harness still has to be told where this
+// turn's report goes.
 // A prompt that goes missing is a Core bug and must be fixed there, where every
 // client benefits; a client that compensated would hide it and would behave
 // differently from the Panel doing the same thing.
+//
+// **A turn ends when its report file lands (client #8).** `wait` and `send --wait`
+// settle on `sessions/<id>/report-<turn>.md` in the Core's Shared folder, ending
+// with the marker, through the Shared watcher. They never read a screen or a
+// status, and never run a command on the Core to look at the file.
 //
 // **A transcript is a screen.** `logs` renders the Core's replay ring through
 // the SDK's terminal emulator, because a harness paints with cursor moves and
@@ -47,11 +55,22 @@
 import { resolveCore } from "./core-resolution.ts";
 import { formatJson, formatTable } from "../kit/cli-output.ts";
 import { isKnownHarness, KNOWN_HARNESSES } from "./session-gateway.ts";
+import type { SharedHandle } from "./shared-gateway.ts";
+import { DEFAULT_WATCH_POLL_MS } from "./shared-gateway.ts";
+import {
+  appendPromptBlock,
+  reportTurns,
+  sessionReportFolder,
+  sessionReportPath,
+  turnForSend,
+} from "./session-report.ts";
+import { awaitReport, reportCursor, ReportWaitTimeoutError, type LandedReport } from "./session-report-wait.ts";
 import { runSessionAttach } from "./session-attach.ts";
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "../kit/exit-codes.ts";
 import type { RegistryPaths } from "../registry/credentials.ts";
 import type { ClientDeps } from "../kit/cli-deps.ts";
 import type { ParsedArgs } from "../kit/cli-args.ts";
+import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type {
   SessionGateway,
   SessionLogs,
@@ -80,8 +99,8 @@ Usage
   actana session ls                         list Sessions on this Core
   actana session logs <session>             print the transcript, rendered
   actana session resume <session> [prompt]  start a Session that continues one
-  actana session send <session> <text>      write text into a running Session
-  actana session wait <session>             block until the Core reports it settled
+  actana session send <session> <text>      write text into a running Session, with the report block
+  actana session wait <session>             block until the turn's report file lands
   actana session kill <session>             stop the harness running for it
   actana session attach <session>           watch a Session live, and type into it
 
@@ -89,8 +108,10 @@ Flags
   --core <name>       which registered Core to talk to
   --json              machine-readable output. Only JSON reaches stdout.
   --wait              start/resume: block until the Core reports it settled
-                      send: block until the turn that text starts has ended
+                      send: block until the report of the turn that text starts lands
   --wait-timeout <s>  give up waiting after this many seconds, and say so
+  --turn <n>          send/wait: which turn's report (default: send takes the next
+                      turn; wait takes the latest one there is, or turn 1)
   --harness <name>    start: ${KNOWN_HARNESSES.join(", ")}
   --title <text>      start: what the Session is called in \`ls\`
   --raw               logs: the bytes, escape codes and all, unrendered
@@ -122,31 +143,37 @@ Attaching, and who is allowed to type
   locks. Ctrl-] detaches; Ctrl-C goes to the harness.
 
 Awaiting a turn
-  \`wait\` blocks until the Core reports the Session settled — \`finished\`,
-  \`needs-input\`, \`interrupted\`, \`terminated\` or \`disconnected\`, because every
-  one of those is a turn that ended. On a Session that is already settled it says
-  so at once.
+  A turn is over when its report file is in the Core's Shared folder and its last
+  line is exactly \`ACT-REPORT-END\`. The report of a plain Session turn is
+  \`sessions/<session-id>/report-<turn>.md\` (\`~/shared/…\` on the Core); the
+  starting prompt is turn 1. \`wait\` and \`send --wait\` settle on that file
+  through the Shared watcher: never on a screen, never on a status, and never by
+  running a command on the Core to read the file. A report that landed before the
+  wait began settles it at once.
 
-  \`send <session> <text> --wait\` writes and then waits for **the turn that write
-  starts**: the Core stamps the delivery in its event log and the wait resolves on
-  the first settling status after that stamp, so it can never answer with the
-  status the Session was already sitting at. With \`--json\` it prints the same
-  object \`start --wait --json\` prints.
+  \`send <session> <text>\` appends the standard block to the text, naming the
+  report path of that turn (the next one after the reports already there, so 2 at
+  the first), the same block the Core appends to a starting prompt. With
+  \`--wait\` it then waits for that report. Without it, it prints the turn, and
+  \`wait <session> --turn <n>\` waits for it later.
 
-  **Sending into a turn that is already running resolves on that turn's end.** A
-  keystroke into a busy harness is not a new turn, so if the Session is mid-turn
-  when the text lands, the wait ends when the *current* turn ends — possibly
-  before the harness has read a character of what you sent. Nothing on this side
-  can tell those apart, and nothing here guesses.
+  \`wait <session>\` with no \`--turn\` waits for the latest report there is: a
+  turn still being written, or the last one if it is complete. After a \`send\`
+  that did not wait, say \`--turn\`: without it the answer is the previous turn's.
 
-  A harness that reports nothing at all runs out the \`--wait-timeout\` and the
-  message says this side gave up — never a status the Core did not send. Without
-  \`--wait-timeout\` there is no deadline: a turn takes as long as the work takes.
+  The result: the report path on stdout, and with \`--json\` an object with
+  \`sessionId\`, \`turn\`, \`reportPath\` and the \`report\` text. Read it again with
+  \`actana shared get <reportPath>\`.
+
+  A harness that writes no report runs out the \`--wait-timeout\` and the message
+  says this side gave up. Without \`--wait-timeout\` there is no deadline: a turn
+  takes as long as the work takes.
 
 Who delivers the prompt
   The Core does (ADR 0026). It waits for the harness to settle, answers the
-  dialog it opened, and writes the prompt. This CLI adds no timing of its own,
-  and \`send\` writes exactly what it is given — a lost prompt is a Core bug.`;
+  dialog it opened, and writes the prompt, followed by the standard block. This CLI
+  adds no timing of its own, and \`send\` writes the text it is given followed by
+  that block — a lost prompt is a Core bug.`;
 
 /** Dispatch a `session` verb. `args.positionals` still has the noun on the front. */
 export async function runSessionCommand(
@@ -388,34 +415,15 @@ async function awaitTurn(
   return settledWell(outcome) ? EXIT_OK : EXIT_FAILURE;
 }
 
-/** {@link awaitTurn}, releasing the attachment's listeners on the way out. */
-async function awaitAttachedTurn(
-  deps: ClientDeps,
-  args: ParsedArgs,
-  session: StartedSession,
-  timeoutMs: number | null,
-): Promise<number> {
-  try {
-    return await awaitTurn(deps, args, session, timeoutMs);
-  } finally {
-    // The listeners this attachment holds, released. The harness on the Core is
-    // untouched — waiting for a Session is not owning it.
-    session.dispose();
-  }
-}
-
 /**
- * `actana session wait <session>` — block until the Core reports it settled.
+ * `actana session wait <session>` — block until a turn's report lands in the Shared folder.
  *
- * **The primitive, and it ships as one** (#289 B). `send --wait` is this with a
- * write in front of it, and the reason the verb exists rather than only the flag
- * is ADR 0026 D1: a client sends text and no timing, so timing gets its own verb
- * instead of being folded into the one that writes.
- *
- * With no text delivered there is no cursor to count from, so this answers from
- * the Session's current status when it is already settled and otherwise on the
- * next settling status. That is the question the verb asks — "tell me when this
- * Session is not working" — and it is not the question `send --wait` asks.
+ * **The primitive, and it ships as one** (#289 B, reworked by client #8): the verb settles on
+ * `sessions/<id>/report-<turn>.md` ending with the marker, through the Shared watcher. It reads no
+ * screen and no status, so a harness that reports nothing about its own turns settles it just the
+ * same. With no `--turn` it means the latest report there is (a turn still being written, or the
+ * last one if it is complete), or turn 1 when there is none; a report already there settles it at
+ * once. After a `send` that did not wait, `--turn` names the turn that send printed.
  */
 async function sessionWait(
   deps: ClientDeps,
@@ -423,7 +431,7 @@ async function sessionWait(
   paths: RegistryPaths,
   rest: string[],
 ): Promise<number> {
-  const misused = misusedFlag(args, ["--wait-timeout"]);
+  const misused = misusedFlag(args, ["--wait-timeout", "--turn"]);
   if (misused) return usage(deps, "wait", misused);
 
   const [sessionId, ...extra] = rest;
@@ -437,12 +445,107 @@ async function sessionWait(
   // verb's own name.
   const timeout = waitTimeoutMs(args, true);
   if (timeout.error) return usage(deps, "wait", timeout.error);
+  const asked = turnFlag(args);
+  if (asked.error) return usage(deps, "wait", asked.error);
 
-  return withGateway(deps, args, paths, "wait", async (gateway) => {
-    deps.verbose(`attaching to session ${sessionId} to wait for it to settle`);
-    const session = await gateway.wait(sessionId);
-    return awaitAttachedTurn(deps, args, session, timeout.ms);
+  return withGateway(deps, args, paths, "wait", async (gateway, core) => {
+    // A typo'd id would otherwise wait for a file nothing will write.
+    const known = await gateway.list();
+    if (!known.some((row) => row.sessionId === sessionId)) {
+      return failed(deps, args, "wait", `this Core has no session ${sessionId}`);
+    }
+    return withShared(deps, args, "wait", core.blob, async (handle) => {
+      const { shared } = handle;
+      // The cursor first, then the folder: a report that lands in between is seen by the watch.
+      const cursor = await reportCursor(shared);
+      const turn = asked.turn ?? latestTurn(await listReportNames(shared, sessionId));
+      deps.verbose(`waiting for ${sessionReportPath(sessionId, turn)}`);
+      return awaitReportAndPrint(deps, args, handle, sessionId, turn, cursor, timeout.ms);
+    });
   });
+}
+
+/** The Shared folder of the Core, opened for one verb and always closed. */
+async function withShared(
+  deps: ClientDeps,
+  args: ParsedArgs,
+  verb: string,
+  blob: CoreRegistrationBlob,
+  run: (handle: SharedHandle) => Promise<number>,
+): Promise<number> {
+  let handle: SharedHandle;
+  try {
+    handle = await deps.openShared(blob, { timeoutMs: SESSION_TIMEOUT_MS });
+  } catch (err) {
+    return failed(deps, args, verb, `could not reach the Shared folder of ${blob.endpoint} — ${messageOf(err)}`);
+  }
+  try {
+    return await run(handle);
+  } finally {
+    handle.close();
+  }
+}
+
+/** The file names in a Session's report folder. */
+async function listReportNames(shared: SharedHandle["shared"], sessionId: string): Promise<string[]> {
+  const entries = await shared.list(sessionReportFolder(sessionId));
+  return entries.filter((entry) => entry.kind === "file").map((entry) => entry.path.split("/").pop() ?? "");
+}
+
+/** The latest turn there is a report file for, or turn 1 when there is none. */
+function latestTurn(names: readonly string[]): number {
+  return Math.max(1, ...reportTurns(names));
+}
+
+/** `--turn <n>`: a whole number from 1. */
+function turnFlag(args: ParsedArgs): { turn: number | null; error?: string } {
+  if (args.turn === null) return { turn: null };
+  const turn = Number(args.turn);
+  if (!/^[1-9][0-9]*$/.test(args.turn) || !Number.isSafeInteger(turn)) {
+    return { turn: null, error: `--turn wants a turn number from 1, not "${args.turn}"` };
+  }
+  return { turn };
+}
+
+/** Wait for one turn's report and print how it went — what `wait` and `send --wait` share. */
+async function awaitReportAndPrint(
+  deps: ClientDeps,
+  args: ParsedArgs,
+  handle: SharedHandle,
+  sessionId: string,
+  turn: number,
+  cursor: string,
+  timeoutMs: number | null,
+): Promise<number> {
+  const reportPath = sessionReportPath(sessionId, turn);
+  deps.err(`Waiting for ${reportPath} to land in the Shared folder…`);
+  let landed: LandedReport;
+  try {
+    landed = await awaitReport(handle.shared, reportPath, {
+      cursor,
+      pollIntervalMs: handle.pollIntervalMs ?? DEFAULT_WATCH_POLL_MS,
+      timeoutMs,
+    });
+  } catch (err) {
+    const message = messageOf(err);
+    if (args.json) {
+      deps.out(formatJson({ sessionId, turn, reportPath, waited: true, error: message }));
+    }
+    deps.err(`actana session: ${message}`);
+    // The one failure with a next step worth naming: it is this side's deadline, not a verdict.
+    if (err instanceof ReportWaitTimeoutError) {
+      deps.err(`\`actana session wait ${sessionId} --turn ${turn}\` waits again; \`actana session logs ${sessionId}\` shows the screen.`);
+    }
+    return EXIT_FAILURE;
+  }
+
+  if (args.json) {
+    deps.out(formatJson({ sessionId, turn, reportPath, waited: true, settled: true, report: landed.body }));
+  } else {
+    deps.out(reportPath);
+    deps.err(`Report landed: ${reportPath} (${new TextEncoder().encode(landed.body).byteLength} bytes). \`actana shared get ${reportPath}\` reads it.`);
+  }
+  return EXIT_OK;
 }
 
 /** `actana session ls` — every Session on the Core, newest first. */
@@ -544,20 +647,19 @@ async function sessionLogs(
 }
 
 /**
- * `actana session send <session> <text>` — the equivalent of typing.
+ * `actana session send <session> <text>` — the equivalent of typing, plus the report block.
  *
- * Verbatim, and nothing appended (ADR 0026, and the module header). `--enter`
- * adds a second write of a carriage return **because the operator asked for
- * one** — no pause between them, no waiting for the harness to look ready, and
- * nothing that decides on its own that Enter is due. Both writes go to one PTY
- * resolved once, so the harness cannot move between them. A *starting* prompt
- * goes through `session start`, where the Core owns the schedule.
+ * The text is written as given, followed by the standard block (client #8): the one-line text the
+ * Core appends to a starting prompt, naming where this turn's report goes. A follow-up turn does
+ * not pass through the Core's delivery (ADR 0026, #404), so without it the harness would not know.
+ * `--enter` adds a second write of a carriage return **because the operator asked for one** — no
+ * pause between them, no waiting for the harness to look ready. Both writes go to one PTY resolved
+ * once. A *starting* prompt goes through `session start`, where the Core owns the schedule and
+ * appends the block itself.
  *
- * `--wait` adds no timing either (#289): it asks the Core to stamp the delivery
- * in its event log and then waits for the first settling status *after* that
- * stamp. The text is the same text, written at the same moment, with the same
- * nothing appended — what `--wait` changes is when this process hangs up, not
- * what the harness receives.
+ * The turn is numbered from the reports already in the Shared folder, and the Shared cursor is taken
+ * *before* anything is written, so a report that lands at once is not missed. `--wait` then settles
+ * on that turn's report, through the Shared watcher, and not on a status.
  */
 async function sessionSend(
   deps: ClientDeps,
@@ -565,7 +667,7 @@ async function sessionSend(
   paths: RegistryPaths,
   rest: string[],
 ): Promise<number> {
-  const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout"]);
+  const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout", "--turn"]);
   if (misused) return usage(deps, "send", misused);
 
   const [sessionId, ...words] = rest;
@@ -574,6 +676,8 @@ async function sessionSend(
   }
   const timeout = waitTimeoutMs(args);
   if (timeout.error) return usage(deps, "send", timeout.error);
+  const asked = turnFlag(args);
+  if (asked.error) return usage(deps, "send", asked.error);
   const read = await readText(deps, words);
   if (read.error) return usage(deps, "send", read.error);
   if (read.text === null && !args.enter) {
@@ -593,39 +697,75 @@ async function sessionSend(
       "nothing to send — stdin was empty; pass --enter to send a bare carriage return",
     );
   }
+  const text = read.text ?? "";
+  if (text.length === 0 && args.wait && asked.turn === null) {
+    // A bare carriage return carries no block, so it names no report to wait for.
+    return usage(deps, "send", "a bare carriage return starts no report — name the turn to wait for with --turn");
+  }
 
-  return withGateway(deps, args, paths, "send", async (gateway) => {
-    const text = read.text ?? "";
-
-    if (args.wait) {
-      // Send-then-wait with **no gap** (#289 B): one attachment resolves the
-      // PTY, writes through it, and waits from the id the Core stamped that
-      // write with. The alternative — send, then attach, then wait — is the
-      // design the issue's landmine is about: the attach would find a Session
-      // sitting at a settled status and answer with last turn's outcome.
-      const andReturn = args.enter ? " and a carriage return" : "";
-      deps.verbose(`sending ${text.length} characters to session ${sessionId}${andReturn}, then waiting`);
-      const session = await gateway.sendAndWait(sessionId, text, { enter: args.enter });
-      deps.err(`Sent ${text.length} characters to session ${sessionId}${andReturn}.`);
-      return awaitAttachedTurn(deps, args, session, timeout.ms);
+  return withGateway(deps, args, paths, "send", async (gateway, core) => {
+    // A bare carriage return is not a turn: no block, no report to number.
+    if (text.length === 0 && !args.wait) {
+      return deliverAndReport(deps, args, gateway, sessionId, text, null);
     }
 
-    // One call, one PTY resolution, both writes (#204 review). The command no
-    // longer decides anything about the return beyond passing on the flag.
-    const delivered = await gateway.send(sessionId, text, { enter: args.enter });
+    return withShared(deps, args, "send", core.blob, async (handle) => {
+      const { shared } = handle;
+      // Before anything is written: a report that lands at once is then after this cursor.
+      const cursor = await reportCursor(shared);
+      const turn = asked.turn ?? turnForSend(await listReportNames(shared, sessionId));
+      const body = text.length === 0 ? text : appendPromptBlock(text, { sessionId, turn });
 
-    if (args.json) {
-      deps.out(formatJson({ sessionId, characters: text.length, enter: args.enter, delivered }));
-    } else if (delivered) {
-      const andReturn = args.enter ? " and a carriage return" : "";
-      deps.err(`Sent ${text.length} characters to session ${sessionId}${andReturn}.`);
-    }
-    if (!delivered) {
-      deps.err(`actana session send: the Core did not accept the write to session ${sessionId}.`);
-      return EXIT_FAILURE;
-    }
-    return EXIT_OK;
+      deps.verbose(`sending ${text.length} characters and the report block (turn ${turn}) to session ${sessionId}`);
+      const code = await deliverAndReport(deps, args, gateway, sessionId, body, { turn, characters: text.length });
+      if (code !== EXIT_OK || !args.wait) return code;
+      return awaitReportAndPrint(deps, args, handle, sessionId, turn, cursor, timeout.ms);
+    });
   });
+}
+
+/** Write the text (and the return, if asked), and say what was sent. */
+async function deliverAndReport(
+  deps: ClientDeps,
+  args: ParsedArgs,
+  gateway: SessionGateway,
+  sessionId: string,
+  body: string,
+  turn: { turn: number; characters: number } | null,
+): Promise<number> {
+  // One call, one PTY resolution, both writes (#204 review). The command no
+  // longer decides anything about the return beyond passing on the flag.
+  const delivered = await gateway.send(sessionId, body, { enter: args.enter });
+  const characters = turn?.characters ?? body.length;
+  const andReturn = args.enter ? " and a carriage return" : "";
+
+  if (args.wait && delivered) {
+    // The wait prints the one document; this line is for a person.
+    deps.err(`Sent ${characters} characters${turn ? " and the report block" : ""} to session ${sessionId}${andReturn}.`);
+  } else if (args.json) {
+    deps.out(
+      formatJson({
+        sessionId,
+        characters,
+        enter: args.enter,
+        delivered,
+        ...(turn ? { turn: turn.turn, reportPath: sessionReportPath(sessionId, turn.turn) } : {}),
+      }),
+    );
+  } else if (delivered) {
+    deps.err(`Sent ${characters} characters${turn ? " and the report block" : ""} to session ${sessionId}${andReturn}.`);
+    if (turn) {
+      deps.err(
+        `Turn ${turn.turn}: the report goes to ${sessionReportPath(sessionId, turn.turn)}; ` +
+          `\`actana session wait ${sessionId} --turn ${turn.turn}\` waits for it.`,
+      );
+    }
+  }
+  if (!delivered) {
+    deps.err(`actana session send: the Core did not accept the write to session ${sessionId}.`);
+    return EXIT_FAILURE;
+  }
+  return EXIT_OK;
 }
 
 /**
@@ -682,7 +822,7 @@ async function withGateway(
   args: ParsedArgs,
   paths: RegistryPaths,
   verb: string,
-  run: (gateway: SessionGateway) => Promise<number>,
+  run: (gateway: SessionGateway, core: { blob: CoreRegistrationBlob }) => Promise<number>,
 ): Promise<number> {
   const resolved = resolveCore({ paths, env: deps.env, home: deps.home, coreFlag: args.core });
   if (!resolved.ok) return failed(deps, args, verb, resolved.error);
@@ -696,7 +836,7 @@ async function withGateway(
   }
 
   try {
-    return await run(gateway);
+    return await run(gateway, resolved.core);
   } catch (err) {
     // Every failure here, not only the gateway's own kinds: a Core that answers
     // a frame with an error, or a link that drops mid-command, arrives as the
@@ -726,6 +866,7 @@ function usage(deps: ClientDeps, verb: string, message: string): number {
 const SESSION_FLAGS: ReadonlyArray<{ name: string; used: (args: ParsedArgs) => boolean }> = [
   { name: "--wait", used: (args) => args.wait },
   { name: "--wait-timeout", used: (args) => args.waitTimeout !== null },
+  { name: "--turn", used: (args) => args.turn !== null },
   { name: "--harness", used: (args) => args.harness !== null },
   { name: "--cwd", used: (args) => args.cwd !== null },
   { name: "--title", used: (args) => args.title !== null },

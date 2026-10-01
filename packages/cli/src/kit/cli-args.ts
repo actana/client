@@ -75,6 +75,8 @@ export type ParsedArgs = {
   wait: boolean;
   /** `--wait-timeout <seconds>`, unparsed — the verb decides what a bad value means. */
   waitTimeout: string | null;
+  /** `--turn <n>`, unparsed: which turn's report `session send` / `session wait` means. */
+  turn: string | null;
   /** `--harness <name>`, or null to take the Project's remembered one. */
   harness: string | null;
   /** `--cwd <path>`: a directory on the **Core's** machine. */
@@ -132,6 +134,7 @@ const VALUE_FLAGS = new Set([
   "--limit",
   "--depth",
   "--wait-timeout",
+  "--turn",
   "--harness",
   "--cwd",
   "--title",
@@ -174,6 +177,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     sha256: false,
     wait: false,
     waitTimeout: null,
+    turn: null,
     harness: null,
     cwd: null,
     title: null,
@@ -232,6 +236,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       else if (name === "--limit") parsed.limit = value;
       else if (name === "--depth") parsed.depth = value;
       else if (name === "--wait-timeout") parsed.waitTimeout = value;
+      else if (name === "--turn") parsed.turn = value;
       else if (name === "--harness") parsed.harness = value;
       else if (name === "--cwd") parsed.cwd = value;
       else if (name === "--title") parsed.title = value;

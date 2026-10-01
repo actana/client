@@ -14,6 +14,7 @@
 
 import { describe, it, expect, afterEach } from "vitest";
 import { CorePairingError } from "@actana/sdk/pairing";
+import { fakeShared } from "./shared-fixture.ts";
 import {
   fakeAttachment,
   fakePairing,
@@ -255,7 +256,10 @@ describe("no verb prints a blob, with --verbose on", () => {
     ];
 
     for (const [what, argv, sessions] of runs) {
-      const run = await cli().run(argv, { sessions });
+      const run = await cli().run(argv, {
+        sessions,
+        ...(what === "session send" ? { shared: fakeShared().open } : {}),
+      });
       expectNoSecrets(what, run.all);
     }
   });
