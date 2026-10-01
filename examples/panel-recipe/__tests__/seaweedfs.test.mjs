@@ -75,6 +75,11 @@ const seaweedfs = () => ({
 });
 const newCoreId = () => `core-rc-${randomBytes(5).toString("hex")}`;
 const fast = { pollMs: 250, timeoutMs: 60_000, exitGraceMs: 20_000 };
+// An object store stamps a file with a Last-Modified in WHOLE seconds, and a Task's result counts only if it
+// is newer than the dispatch time (ms). A result written within the second of the dispatch can therefore
+// look older than it and be ignored (the Panel's watcher has the same rule). A real agent takes longer than
+// that; the fake one is made to, so these tests judge the recipe and not the store's clock.
+const AGENT_THINKS_MS = 2_100;
 
 /** The Core's own view of the folder, signed with the key the recipe handed it (not the controller's). */
 function coreSideShared(core) {
@@ -174,7 +179,7 @@ describe.skipIf(!configured)("the recipe's S3 steps on a real SeaweedFS", () => 
     const core = startFakeCore({
       coreId: newCoreId(),
       harness: async ({ prompt }) => {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, AGENT_THINKS_MS));
         const file = prompt.includes("attempt 1)") ? "fail.md" : "success.md";
         await coreSideShared(core).put(`tasks/T-1/${file}`, `# ${file}\n\nbody\n\n${REPORT_END_MARKER}\n`);
       },
@@ -202,7 +207,7 @@ describe.skipIf(!configured)("the recipe's S3 steps on a real SeaweedFS", () => 
     const core = startFakeCore({
       coreId: newCoreId(),
       harness: async ({ prompt }) => {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, AGENT_THINKS_MS));
         const session = reportPathFromPrompt(prompt);
         const path = prompt.includes("~/shared/tasks/T-7/") ? `tasks/T-7/success.md` : session;
         await coreSideShared(core).put(path, `# ok\n\n${path}\n\n${REPORT_END_MARKER}\n`);
