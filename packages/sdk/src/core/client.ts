@@ -63,8 +63,7 @@ import {
   type RegistrationBlob,
 } from "../pairing/registration-blob.ts";
 import { createCoreFilesFetch, type CoreFilesFetch } from "./files-http.ts";
-import type { CoreFilesAvailability } from "./files.ts";
-import { CoreProject } from "./project.ts";
+import { CoreFiles, type CoreFilesAvailability } from "./files.ts";
 
 /**
  * Request frames that only mean anything against a Core announcing
@@ -150,7 +149,7 @@ export type CoreConnectionInfo = {
   /**
    * The `files` capability, or null on a Core with no file surface (#165 F9).
    *
-   * Non-null means this Core answers `/v1/projects/:projectId/files` on its
+   * Non-null means this Core answers `/v1/files` on its
    * HTTPS origin — {@link CoreConnection.httpsBaseUrl}, off the same
    * registration blob that produced this connection's `wss://` url.
    */
@@ -189,7 +188,7 @@ export type CoreClientOptions = {
    */
   createSocket?: CoreLinkSocketFactory;
   /**
-   * How {@link CoreClient.project}'s file surface sends its HTTPS requests.
+   * How {@link CoreClient.files}'s file surface sends its HTTPS requests.
    * Defaults to `fetch` through an undici `Agent` carrying the same `tls`
    * material the socket presents (#151's frozen shape). The socket's sibling:
    * injectable for tests, for a proxy, and for a runtime with its own
@@ -275,7 +274,7 @@ export class CoreClient {
   /** The URL this client dials. Public because a log line without it is a riddle. */
   readonly url: string;
   /**
-   * The same Core's `https://` origin — where `project.files.*` sends its
+   * The same Core's `https://` origin — where `files.*` sends its
    * requests (#129 F2, ADR 0028). The server that terminates the WebSocket is
    * the server that answers `/v1/…`, so this is the dial URL with its scheme
    * swapped and nothing else.
@@ -297,12 +296,11 @@ export class CoreClient {
   protected readonly tls: CoreLinkTlsMaterial | null;
   /**
    * The file surface's sender, built once on first use and shared by every
-   * {@link project} handle this client hands out.
+   * {@link files} surface this client hands out.
    *
-   * Shared rather than per-handle because the default carries an undici `Agent`,
-   * and an `Agent` is a connection pool: one per `client.project(id)` call would
-   * open a fresh TLS session for every Project a caller touched, and re-do the
-   * handshake for every loop iteration that re-derived the handle.
+   * Shared rather than rebuilt per call because the default carries an undici
+   * `Agent`, and an `Agent` is a connection pool: one per `client.files` read
+   * would re-do the TLS handshake for every loop iteration that touched it.
    */
   private filesFetch: CoreFilesFetch | null;
   protected readonly heartbeat: CoreLinkHeartbeatOptions | false;
@@ -352,8 +350,8 @@ export class CoreClient {
    * same reason `multiConnection` is: a Core can be downgraded, and a stale
    * `true` here would send a caller at a route that is no longer there.
    */
-  private files: CoreLinkFilesCapability | null = null;
-  /** This Core's `shared` capability on the *current* connection; reset like `files`. */
+  private filesCap: CoreLinkFilesCapability | null = null;
+  /** This Core's `shared` capability on the *current* connection; reset like `filesCap`. */
   private shared: CoreLinkSharedCapability | null = null;
   private authOkFrame: CoreLinkAuthOkFrame | null = null;
 
@@ -465,7 +463,7 @@ export class CoreClient {
     if (this.closed) return;
     this.ready = null;
     this.multiConnection = null;
-    this.files = null;
+    this.filesCap = null;
     this.shared = null;
     this.authOkFrame = null;
     this.established = false;
@@ -478,7 +476,7 @@ export class CoreClient {
         onReady: (frame) => {
           this.ready = frame;
           this.multiConnection = readMultiConnectionCapability(frame.multiConnection);
-          this.files = readFilesCapability(frame.files);
+          this.filesCap = readFilesCapability(frame.files);
           this.shared = readSharedCapability(frame.shared);
           const info = this.connectionInfo();
           for (const cb of this.readyListeners) cb(info);
@@ -516,7 +514,7 @@ export class CoreClient {
         onClose: (reason) => {
           this.ready = null;
           this.multiConnection = null;
-          this.files = null;
+          this.filesCap = null;
           this.shared = null;
           this.authOkFrame = null;
           // Cleared here and not only on the next dial: between a socket dying
@@ -621,7 +619,7 @@ export class CoreClient {
       protocolVersion: this.ready?.version ?? null,
       compatible: coreLinkProtocolCompatible(this.ready?.version ?? null),
       multiConnection: this.multiConnection,
-      files: this.files,
+      files: this.filesCap,
       shared: this.shared,
       coreId: this.authOkFrame?.coreId ?? null,
       bearerExpiresAt: this.authOkFrame?.exp ?? null,
@@ -705,7 +703,7 @@ export class CoreClient {
    * points an HTTPS request.
    */
   canUseFileRoutes(): boolean {
-    return this.files !== null;
+    return this.filesCap !== null;
   }
 
   /**
@@ -713,7 +711,7 @@ export class CoreClient {
    * version rather than the yes/no — the gate is {@link canUseFileRoutes}.
    */
   filesCapability(): CoreLinkFilesCapability | null {
-    return this.files;
+    return this.filesCap;
   }
 
   /**
@@ -725,22 +723,18 @@ export class CoreClient {
   }
 
   /**
-   * A handle on one Project — today, its files (#129 F12).
+   * The Core's files under its home folder (#129 F12, control #557): list,
+   * upload, download and remove, every path relative to `~`.
    *
-   * Opens nothing and validates nothing: this is a name and a base URL bound
-   * together, so calling it in a loop is free and calling it for a Project this
-   * Core has never heard of is not an error until a request is made, at which
-   * point the Core answers `404 project-not-found` and says so properly.
-   *
-   * The file surface reads {@link canUseFileRoutes} at the top of *every* call
-   * rather than here. A handle taken while a Core was connected and used after
-   * it dropped must not send a request into the dark, and a handle taken before
-   * `connect()` resolved must not be permanently poisoned — both follow from
-   * asking at the call rather than at construction.
+   * Opens nothing: this is a base URL and a sender bound together, so reading it
+   * in a loop is free. The file surface reads {@link canUseFileRoutes} at the
+   * top of *every* call rather than here. A surface taken while a Core was
+   * connected and used after it dropped must not send a request into the dark,
+   * and one taken before `connect()` resolved must not be permanently poisoned —
+   * both follow from asking at the call rather than at construction.
    */
-  project(projectId: string): CoreProject {
-    return new CoreProject({
-      id: projectId,
+  get files(): CoreFiles {
+    return new CoreFiles({
       baseUrl: this.httpsBaseUrl,
       bearer: this.bearer,
       availability: () => this.filesAvailability(),
@@ -775,7 +769,7 @@ export class CoreClient {
           "surface — await connect() first",
       };
     }
-    if (this.files !== null) return { available: true };
+    if (this.filesCap !== null) return { available: true };
     return {
       available: false,
       reason:
@@ -799,7 +793,7 @@ export class CoreClient {
     // client — which contradicts its own documented "false after a drop" and
     // would point a caller's HTTPS request at a Core this client is no longer
     // talking to. `ready` is cleared for the same reason.
-    this.files = null;
+    this.filesCap = null;
     this.multiConnection = null;
     this.ready = null;
     const err = new Error("core-link client closed");

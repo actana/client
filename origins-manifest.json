@@ -9,9 +9,9 @@
       "remote": "control/main",
       "repo": "https://github.com/actana/control",
       "testPin": {
-        "commit": "aa03266415e969829b4616861a13c11cb04d1142",
-        "branch": "feat/556-core-session-rename",
-        "note": "Test-only vendored Core (packages/sdk/scripts/vendor-control-pin.mjs). An unmerged actana/control draft commit (PR 598): the SDK Session rename needs a Core that speaks Session to run its real-Core tests. Moves to the merged commit once control 598 merges. Lifted entries keep commit d7eeb65 as their provenance; their divergence is recorded per entry."
+        "commit": "9d91c77b6190520ba69dd6cb338f85b931f0ba3c",
+        "branch": "feat/0.5.0",
+        "note": "Test-only vendored Core (packages/sdk/scripts/vendor-control-pin.mjs). A merged actana/control commit on feat/0.5.0 (PR 620, the Files API at /v1/files under the home): the SDK Files client sends the home routes, so its real-Core tests need a Core that serves them. Includes the Session rename (PR 618). Lifted entries keep commit d7eeb65 as their provenance; their divergence is recorded per entry."
       }
     },
     "actana/search": {

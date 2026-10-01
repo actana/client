@@ -1,4 +1,4 @@
-// The one-write-per-Project rule (F8), as it reaches a caller: **an error, and
+// The one-write-at-a-time rule (F8), as it reaches a caller: **an error, and
 // never a retry** (#167).
 //
 // The trap this suite exists to pin is not "does the Core refuse" — it does,
@@ -45,16 +45,15 @@ describe("a second write while one is running", () => {
     const connected = await connectedClient(rig);
     client = connected.client;
     coreRig = connected.coreRig;
-    const project = client.project(rig.projectId);
 
     // A body that has started but will not finish until this suite says so —
-    // which is what holds the Project's write lease open.
+    // which is what holds the home's write lease open.
     let release = (): void => {};
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
     const slow = drain(
-      project.files.upload({
+      client.files.upload({
         path: "slow.bin",
         body: (async function* () {
           yield new TextEncoder().encode("first");
@@ -68,7 +67,7 @@ describe("a second write while one is running", () => {
     await vi.waitFor(() => expect(fs.existsSync(path.join(rig!.root, "slow.bin"))).toBe(true));
 
     const error = (await drain(
-      project.files.upload({ path: "second.bin", body: chunk("nope") }),
+      client.files.upload({ path: "second.bin", body: chunk("nope") }),
     ).catch((err: unknown) => err)) as CoreFilesConflictError;
 
     expect(error).toBeInstanceOf(CoreFilesConflictError);
@@ -79,7 +78,7 @@ describe("a second write while one is running", () => {
     expect(error.code).toBe("transfer-in-progress");
     // "Try again" is useless advice without which transfer and since when.
     expect(error.message).toContain("slow.bin");
-    expect(error.message).toContain("one write at a time per Project");
+    expect(error.message).toContain("one write at a time");
     // Nothing was written for the loser — the refusal came off the status line,
     // not after the body had crossed.
     expect(fs.existsSync(path.join(rig.root, "second.bin"))).toBe(false);
@@ -89,7 +88,7 @@ describe("a second write while one is running", () => {
 
     // And the lease is released with the request, so the conflict is never
     // permanent: the same write now succeeds.
-    const after = await drain(project.files.upload({ path: "second.bin", body: chunk("yes") }));
+    const after = await drain(client.files.upload({ path: "second.bin", body: chunk("yes") }));
     expect(after[0]).toMatchObject({ type: "entry", result: "written" });
   });
 
@@ -105,7 +104,7 @@ describe("a second write while one is running", () => {
         new Response(
           JSON.stringify({
             code: "transfer-in-progress",
-            error: "another write transfer is already running on this Project",
+            error: "another write transfer is already running in the home",
           }),
           { status: 409, headers: { "content-type": "application/json" } },
         ),
@@ -121,7 +120,7 @@ describe("a second write while one is running", () => {
     await client.connect();
 
     await expect(
-      drain(client.project(rig.projectId).files.upload({ path: "a.bin", body: chunk("a") })),
+      drain(client.files.upload({ path: "a.bin", body: chunk("a") })),
     ).rejects.toBeInstanceOf(CoreFilesConflictError);
 
     expect(sent).toHaveLength(1);
@@ -153,7 +152,7 @@ describe("a second write while one is running", () => {
     await client.connect();
 
     await expect(
-      client.project(rig.projectId).files.download({ path: "gone.txt" }),
+      client.files.download({ path: "gone.txt" }),
     ).rejects.toMatchObject({ status: 404 });
     expect(sent).toHaveLength(1);
   });
@@ -167,7 +166,7 @@ describe("a file write onto a non-empty directory", () => {
     coreRig = connected.coreRig;
 
     const error = (await drain(
-      client.project(rig.projectId).files.upload({ path: "src", body: chunk("oops") }),
+      client.files.upload({ path: "src", body: chunk("oops") }),
     ).catch((err: unknown) => err)) as CoreFilesConflictError;
 
     expect(error).toBeInstanceOf(CoreFilesConflictError);

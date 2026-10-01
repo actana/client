@@ -3,7 +3,7 @@
 //
 // Everything in this package before this module spoke one protocol: the
 // core-link WebSocket. File bytes deliberately do not cross it (ADR 0028), so
-// `project.files.*` dials the *same* mTLS server on the *same* port with the
+// `client.files.*` dials the *same* mTLS server on the *same* port with the
 // *same* certificate and bearer, over HTTP instead of a WebSocket upgrade.
 // `CoreConnection.httpsBaseUrl` has named that origin since phase 1 precisely
 // so this module would not be the thing that changed a published shape.
@@ -69,7 +69,7 @@ import type { CoreLinkTlsMaterial } from "./link-socket.ts";
 // the ticket was about.
 export type { CoreFilesErrorCode } from "./files-error-codes.ts";
 
-/** Base class for everything `project.files.*` throws, so one `catch` can name it. */
+/** Base class for everything `client.files.*` throws, so one `catch` can name it. */
 export class CoreFilesError extends Error {
   constructor(message: string) {
     super(message);
@@ -134,10 +134,10 @@ export class CoreFilesRequestError extends CoreFilesError {
 }
 
 /**
- * The one-write-per-Project rule (F8), as an error and **never as a retry**.
+ * The one-write-at-a-time rule (F8), as an error and **never as a retry**.
  *
  * `409 transfer-in-progress` is a conflict a human has to resolve — some other
- * transfer is running on this Project right now, possibly a multi-gigabyte one
+ * transfer is running on this Core's home right now, possibly a multi-gigabyte one
  * with twenty minutes left. A client that retried under the hood would convert
  * the Core's clear, immediate refusal into a hang with no output, which is
  * strictly worse than the error: the operator loses both the reason and the
@@ -174,7 +174,7 @@ export class CoreFilesStreamError extends CoreFilesError {
 
 /** One request, in the terms this surface actually uses. */
 export type CoreFilesRequest = {
-  /** DELETE and POST are for `/v1/files` delete, folder and move (control #557); the Project client still only sends GET/HEAD/PUT. */
+  /** DELETE and POST are for `/v1/files` delete, folder and move (control #557); `CoreFiles` sends GET, HEAD, PUT and DELETE. */
   method: "GET" | "HEAD" | "PUT" | "DELETE" | "POST";
   url: string;
   headers: Record<string, string>;

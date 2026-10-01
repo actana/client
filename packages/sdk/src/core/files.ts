@@ -1,13 +1,16 @@
-// `project.files.list / upload / download` — the SDK half of #129 F12 (#167).
+// `client.files.list / upload / download / remove` — the SDK half of #129 F12 (#167),
+// re-addressed at the home folder (actana/client#10 part 4, control#557).
 //
-// A Project's files are reached over the Core's `/v1/…` HTTPS routes, never
-// over the core link (ADR 0028). What this module adds on top of those routes
-// is the shape a caller should actually hold:
+// A Core's files are reached over its `/v1/files` HTTPS routes, never over the
+// core link (ADR 0028). Every path is relative to the home of the Core's user
+// (`~`, ADR 0041 D1) and confined to it: there is no Project and no id in the
+// address. What this module adds on top of those routes is the shape a caller
+// should actually hold:
 //
-//     const project = client.project(projectId);
-//     for await (const entry of project.files.list()) …
-//     for await (const line of project.files.upload({ path, body })) …
-//     const { stream } = await project.files.download({ path });
+//     for await (const entry of client.files.list()) …
+//     for await (const line of client.files.upload({ path, body })) …
+//     const { stream } = await client.files.download({ path });
+//     await client.files.remove("old/notes.txt");
 //
 // ## Everything here streams, and streams *lazily*
 //
@@ -37,9 +40,10 @@
 // uploading a folder hands it a tar stream and says `kind: "tar"`.
 //
 // **It does not retry.** See {@link CoreFilesConflictError} — the one-write-
-// per-Project rule (F8) is a conflict for a human to resolve, and a silent
+// one-write-at-a-time rule (F8) is a conflict for a human to resolve, and a silent
 // retry loop would turn the Core's immediate, well-worded refusal into a hang.
 import {
+  CoreFilesRequestError,
   CoreFilesStreamError,
   CoreFilesUnavailableError,
   refusalFrom,
@@ -63,7 +67,7 @@ export type CoreFileWriteResult = "written" | "overwritten";
  * One entry of a listing, in the manifest shape PR 215 established: `{path,
  * size, mtime, mode, sha256}`.
  *
- * `path` is **Project-relative**, which is the address space F1 gives the
+ * `path` is **home-relative**, which is the address space F1 gives the
  * operator — the same string that goes back to `download`.
  *
  * `sha256` is nullable on purpose, and the Core settled which way it means:
@@ -115,7 +119,7 @@ export type CoreFileDownload = {
 export type CoreFileSource = ReadableStream<Uint8Array> | AsyncIterable<Uint8Array | string>;
 
 export type CoreFileUploadOptions = {
-  /** Project-relative destination. `""` is the Project root, which only a tar may target. */
+  /** Home-relative destination. `""` is the home itself, which only a tar may target. */
   path: string;
   body: CoreFileSource;
   /**
@@ -140,13 +144,13 @@ export type CoreFileUploadOptions = {
 };
 
 export type CoreFileDownloadOptions = {
-  /** Project-relative path. A directory comes back as one streamed tar. */
+  /** Home-relative path. A directory comes back as one streamed tar. */
   path: string;
   signal?: AbortSignal;
 };
 
 export type CoreFileListOptions = {
-  /** Subtree to list, Project-relative. Default: the whole Project. */
+  /** Subtree to list, home-relative. Default: the whole home. */
   path?: string;
   /** Maximum depth to descend. `1` is the immediate children. Default: the whole tree. */
   depth?: number;
@@ -161,7 +165,6 @@ export type CoreFileListOptions = {
 };
 
 export type CoreFilesOptions = {
-  projectId: string;
   /** The Core's HTTPS origin — `CoreConnection.httpsBaseUrl`. No trailing slash. */
   baseUrl: string;
   /** The same signed bearer the core link's `auth` frame presents, or null on a loopback rig. */
@@ -177,9 +180,39 @@ export type CoreFilesOptions = {
 };
 
 /**
- * A Project's files, over the Core's HTTPS routes.
+ * Why a home-relative path cannot be sent, or null: a NUL byte or a backslash
+ * (`malformed-path`), a leading `/` (`absolute-path`), or a `..` segment
+ * (`dot-dot-segment`). The same string checks the Core makes first
+ * (`stringRefusal`, control #557), with the same codes, so a caller reads one
+ * answer whether the refusal was made here or there.
  *
- * Reached as `client.project(id).files` rather than constructed directly.
+ * It decides nothing about the disk: a symlink inside the home that leads out is
+ * the Core's to refuse, and it does (`outside-project-root`).
+ */
+export function homePathRefusal(
+  requested: string,
+): { code: "malformed-path" | "absolute-path" | "dot-dot-segment"; message: string } | null {
+  if (requested.includes("\0")) return { code: "malformed-path", message: "path contains a NUL byte" };
+  if (requested.includes("\\")) return { code: "malformed-path", message: "path contains a backslash" };
+  if (requested.startsWith("/")) {
+    return { code: "absolute-path", message: "path must be relative to the home folder, not absolute" };
+  }
+  if (requested.split("/").includes("..")) {
+    return { code: "dot-dot-segment", message: 'path may not contain ".."' };
+  }
+  return null;
+}
+
+/** {@link homePathRefusal} as a thrown refusal, so no request goes out for a path that cannot be right. */
+function refuseUnsafeHomePath(requested: string): void {
+  const refusal = homePathRefusal(requested);
+  if (refusal) throw new CoreFilesRequestError(400, refusal.code, refusal.message);
+}
+
+/**
+ * A Core's files under its home, over the Core's HTTPS routes.
+ *
+ * Reached as `client.files` rather than constructed directly.
  */
 export class CoreFiles {
   private readonly opts: CoreFilesOptions;
@@ -189,7 +222,7 @@ export class CoreFiles {
   }
 
   /**
-   * The Project's tree, one entry at a time.
+   * The tree under a home-relative path, one entry at a time.
    *
    * Reads the Core's real listing route — `GET …/files/list`, see
    * {@link listUrl} — which streams `{path, kind, size, mtime, mode, sha256}`
@@ -203,14 +236,15 @@ export class CoreFiles {
    * is a fact about the tree, not an entry in it, and not a reason to stop.
    */
   async *list(opts: CoreFileListOptions = {}): AsyncGenerator<CoreFileEntry, void, undefined> {
-    this.requireAvailable("listing a Project's files");
+    this.requireAvailable("listing the Core's files");
+    refuseUnsafeHomePath(opts.path ?? "");
     const res = await this.opts.fetch({
       method: "GET",
       url: this.listUrl(opts),
       headers: { ...this.authHeaders(), accept: "application/x-ndjson" },
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
-    if (!res.ok) throw await refusalFrom(res, "listing this Project");
+    if (!res.ok) throw await refusalFrom(res, "listing the Core's files");
     if (!res.body) return;
 
     for await (const line of ndjsonLines(res.body)) {
@@ -230,7 +264,7 @@ export class CoreFiles {
   }
 
   /**
-   * Write a stream into the Project, and watch it land.
+   * Write a stream into the home, and watch it land.
    *
    * The returned iterable is the Core's NDJSON progress stream, parsed: one
    * `entry` line per file — each carrying `result: "written" | "overwritten"`,
@@ -243,14 +277,15 @@ export class CoreFiles {
    * alternative is a method that returns a promise and quietly buffers a
    * gigabyte of progress nobody read.
    *
-   * Throws {@link CoreFilesConflictError} when another write already holds this
-   * Project's lease (F8) — immediately, and without retrying. Throws
+   * Throws {@link CoreFilesConflictError} when another write already holds the
+   * home's write lease (F8) — immediately, and without retrying. Throws
    * {@link CoreFilesStreamError} when the write fails part-way through, which
    * arrives as the stream's last line rather than as a status code, the `200`
    * having been spent on the first entry.
    */
   async *upload(opts: CoreFileUploadOptions): AsyncGenerator<CoreFileProgress, void, undefined> {
-    this.requireAvailable("writing files to a Project");
+    this.requireAvailable("writing files to the Core");
+    refuseUnsafeHomePath(opts.path);
     const headers: Record<string, string> = {
       ...this.authHeaders(),
       // `application/x-tar` is what tells the Core to unpack rather than to
@@ -273,7 +308,7 @@ export class CoreFiles {
     // still going out: the Core takes the write lease before it reads a byte,
     // so `409 transfer-in-progress` is answered from the status line rather
     // than after a gigabyte has crossed.
-    if (!res.ok) throw await refusalFrom(res, `writing ${opts.path || "this Project"}`);
+    if (!res.ok) throw await refusalFrom(res, `writing ${opts.path || "the home"}`);
     if (!res.body) return;
 
     for await (const line of ndjsonLines(res.body)) {
@@ -316,14 +351,15 @@ export class CoreFiles {
    * was about to open — so nothing is read twice to produce it.
    */
   async download(opts: CoreFileDownloadOptions): Promise<CoreFileDownload> {
-    this.requireAvailable("reading a Project's files");
+    this.requireAvailable("reading the Core's files");
+    refuseUnsafeHomePath(opts.path);
     const res = await this.opts.fetch({
       method: "GET",
       url: this.fileUrl(opts.path),
       headers: this.authHeaders(),
       ...(opts.signal ? { signal: opts.signal } : {}),
     });
-    if (!res.ok) throw await refusalFrom(res, `reading ${opts.path || "this Project"}`);
+    if (!res.ok) throw await refusalFrom(res, `reading ${opts.path || "the home"}`);
     if (!res.body) {
       throw new CoreFilesStreamError("read-failed", `the Core answered ${opts.path} with no body`);
     }
@@ -337,13 +373,35 @@ export class CoreFiles {
   }
 
   /**
-   * `…/v1/projects/:projectId/files/list?path=<relative>` — a route of its own.
+   * Delete a file or a symlink; a path ending in `/` deletes a folder and
+   * everything in it (control #557). Refused by the Core, and not sent when it
+   * cannot be: a folder spelt without the slash, a slash on a file and the home.
+   *
+   * Throws {@link CoreFilesConflictError} when a write holds the home's lease.
+   */
+  async remove(filePath: string, opts: { signal?: AbortSignal } = {}): Promise<void> {
+    this.requireAvailable("deleting files on the Core");
+    refuseUnsafeHomePath(filePath);
+    const res = await this.opts.fetch({
+      method: "DELETE",
+      url: this.fileUrl(filePath),
+      headers: { ...this.authHeaders(), accept: "application/json" },
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
+    if (!res.ok) throw await refusalFrom(res, `deleting ${filePath || "the home"}`);
+    // The answer is a small JSON receipt; it carries nothing a caller needs, and
+    // an unread body would hold the connection.
+    await res.arrayBuffer();
+  }
+
+  /**
+   * `…/v1/files/list?path=<relative>` — a route of its own.
    *
    * This module used to send `?list=1` on the read route instead, and argued for
-   * it on cost: the Core's `parseRoute` matched `/v1/projects/:id/files` on an
-   * exact four-segment split, so a `…/files/list` leaf was a change to that
+   * it on cost: the Core's `parseRoute` matched the read route on an
+   * exact segment split, so a `…/files/list` leaf was a change to that
    * parser and a query parameter was not. That cost is now paid — #216 shipped a
-   * parser that reads the fifth segment — and what is left is the Core's
+   * parser that reads the list leaf — and what is left is the Core's
    * argument, which was never about cost: a listing and a read of the same
    * folder answer with completely different things, one a manifest and one a
    * tar. A query parameter that a proxy, a redirect or a hand-edited URL can
@@ -364,7 +422,7 @@ export class CoreFiles {
     return url.toString();
   }
 
-  /** `…/v1/projects/:projectId/files?path=<relative>` — the read and write route. */
+  /** `…/v1/files?path=<relative>` — the read, write and delete route. */
   protected fileUrl(filePath: string): string {
     const url = this.routeUrl("files");
     url.searchParams.set("path", filePath);
@@ -372,16 +430,16 @@ export class CoreFiles {
   }
 
   /**
-   * `<baseUrl>/v1/projects/:projectId/<leaf>`, with the Project id escaped.
+   * `<baseUrl>/v1/<leaf>`.
    *
-   * The two routes above differ by their leaf and by nothing else, and that is
+   * The routes above differ by their leaf and by nothing else, and that is
    * worth having in one place: the day this surface gains a third, the origin,
    * the version prefix and the escaping should not be a third opportunity to get
    * one of them subtly wrong.
    */
   private routeUrl(leaf: string): URL {
     const base = this.opts.baseUrl.replace(/\/+$/, "");
-    return new URL(`${base}/v1/projects/${encodeURIComponent(this.opts.projectId)}/${leaf}`);
+    return new URL(`${base}/v1/${leaf}`);
   }
 
   private authHeaders(): Record<string, string> {
@@ -447,7 +505,7 @@ async function* ndjsonLines(body: ReadableStream<Uint8Array>): AsyncGenerator<un
     // Runs on an early `break` out of the caller's `for await` too, which is
     // what tells the Core the reader walked away — without it an abandoned
     // upload would leave the Core's handler parked in `drained` until its
-    // socket timed out, still holding the Project's write lease.
+    // socket timed out, still holding the home's write lease.
     await reader.cancel().catch(() => {});
   }
 }

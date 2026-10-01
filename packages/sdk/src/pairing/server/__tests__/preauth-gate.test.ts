@@ -17,7 +17,7 @@ const isOpenPath = openPathPredicate(DEFAULT_OPEN_PATHS);
 
 describe("clientCertGate", () => {
   it("serves anything to a connection that presented a verified certificate", () => {
-    expect(clientCertGate({ pathname: "/v1/projects/p1/files", authorized: true })).toBe("serve");
+    expect(clientCertGate({ pathname: "/v1/files", authorized: true })).toBe("serve");
     expect(clientCertGate({ pathname: PAIRING_REDEEM_PATH, authorized: true, isPreAuthPath: isPairingPath })).toBe(
       "serve",
     );
@@ -30,7 +30,7 @@ describe("clientCertGate", () => {
   });
 
   it("refuses every other path to that connection", () => {
-    for (const pathname of ["/v1/projects/p1/files", "/v1/projects/p1/files/list", "/healthz", "/"]) {
+    for (const pathname of ["/v1/files", "/v1/files/list", "/healthz", "/"]) {
       expect(clientCertGate({ pathname, authorized: false, isPreAuthPath: isPairingPath })).toBe("refuse");
     }
   });

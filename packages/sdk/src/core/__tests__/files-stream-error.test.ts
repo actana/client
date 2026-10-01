@@ -155,7 +155,7 @@ describe("an upload whose stream ends in an error line", () => {
     const error = await withDeadline(
       (async () => {
         try {
-          for await (const line of core.project("proj_1").files.upload({
+          for await (const line of core.files.upload({
             path: "tree",
             kind: "tar",
             body: source(),
@@ -199,7 +199,7 @@ describe("an upload whose stream ends in an error line", () => {
     );
 
     const error = await withDeadline(
-      drainError(core.project("proj_1").files.upload({ path: "one.txt", body: source() })),
+      drainError(core.files.upload({ path: "one.txt", body: source() })),
     );
 
     expect(error).toBeInstanceOf(CoreFilesStreamError);
@@ -227,7 +227,7 @@ describe("a listing whose stream ends in an error line", () => {
     const error = await withDeadline(
       (async () => {
         try {
-          for await (const entry of core.project("proj_1").files.list()) seen.push(entry);
+          for await (const entry of core.files.list()) seen.push(entry);
           return null;
         } catch (err: unknown) {
           return err;
@@ -257,7 +257,7 @@ describe("a stream cut mid-JSON", () => {
 
     const error = await withDeadline(
       drainError(
-        core.project("proj_1").files.upload({ path: "tree", kind: "tar", body: source() }),
+        core.files.upload({ path: "tree", kind: "tar", body: source() }),
       ),
     );
 
@@ -283,7 +283,7 @@ describe("a stream cut mid-JSON", () => {
     const error = await withDeadline(
       (async () => {
         try {
-          for await (const _entry of core.project("proj_1").files.list()) void _entry;
+          for await (const _entry of core.files.list()) void _entry;
           return null;
         } catch (err: unknown) {
           return err;
@@ -300,7 +300,7 @@ describe("a stream cut mid-JSON", () => {
     const core = await clientFor(await serveLines([fragment]));
 
     const error = (await withDeadline(
-      drainError(core.project("proj_1").files.upload({ path: "tree", kind: "tar", body: source() })),
+      drainError(core.files.upload({ path: "tree", kind: "tar", body: source() })),
     )) as CoreFilesStreamError;
 
     expect(error).toBeInstanceOf(CoreFilesStreamError);
@@ -334,7 +334,7 @@ describe("a stream that stops after entries, with neither done nor error", () =>
     const seen = await withDeadline(
       (async () => {
         const lines: CoreFileProgress[] = [];
-        for await (const line of core.project("proj_1").files.upload({
+        for await (const line of core.files.upload({
           path: "tree",
           kind: "tar",
           body: source(),
@@ -364,7 +364,7 @@ describe("a stream that ends properly", () => {
     const seen = await withDeadline(
       (async () => {
         const lines: CoreFileProgress[] = [];
-        for await (const line of core.project("proj_1").files.upload({
+        for await (const line of core.files.upload({
           path: "src/one.ts",
           body: source(),
         })) {

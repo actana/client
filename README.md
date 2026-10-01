@@ -18,7 +18,7 @@ This repository is scaffolded from [actana/control](https://github.com/actana/co
 
 ## Using the SDK like the Panel does
 
-[docs/panel-recipe.md](./docs/panel-recipe.md) shows how to do what the Panel does with a Core using only the public SDK (pair a Core, attach its Shared folder with a key issuer, start a Session and watch its report, dispatch a Task and turn its result files into status), with a runnable script in [`examples/panel-recipe`](./examples/panel-recipe). The SDK's other docs: [shared-key issuers](./docs/shared-key-issuers.md), [the report contract](./docs/report-contract.md).
+[docs/panel-recipe.md](./docs/panel-recipe.md) shows how to do what the Panel does with a Core using only the public SDK (pair a Core, attach its Shared folder with a key issuer, start a Session and watch its report, dispatch a Task and turn its result files into status), with a runnable script in [`examples/panel-recipe`](./examples/panel-recipe). The SDK's other docs: [`actana files`](./docs/cli-files.md), [shared-key issuers](./docs/shared-key-issuers.md), [the report contract](./docs/report-contract.md).
 
 ## Development
 
