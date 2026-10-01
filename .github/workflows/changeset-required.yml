@@ -17,7 +17,15 @@ env:
 jobs:
   verify:
     name: Changeset
-    if: github.event.pull_request.draft == false
+    # The Version Packages PR is the one PR that carries no changeset by design: the Changesets
+    # versioning commit on `changeset-release/main` (the branch changesets/action pushes) consumes
+    # them into package versions and `.changeset/pre.json`, so `changeset status` always finds none.
+    # Skip it for that one branch, and only when it is a branch of this repository, so a fork
+    # cannot dodge the check by naming its branch the same. Every other branch is still checked.
+    if: >-
+      github.event.pull_request.draft == false &&
+      !(github.head_ref == 'changeset-release/main' &&
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

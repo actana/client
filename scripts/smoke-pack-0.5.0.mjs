@@ -65,8 +65,11 @@ ensurePnpm();
 
 run(repoRoot, process.execPath, [packScript]);
 
-const sdkTgz = join(repoRoot, ".pack/actana-sdk-0.5.0.tgz");
-const cliTgz = join(repoRoot, ".pack/actana-cli-0.5.0.tgz");
+// Versions come from the package manifests, so the smoke runs for any version (0.6.0-next.0 too).
+const sdkVersion = JSON.parse(readFileSync(join(repoRoot, "packages/sdk/package.json"), "utf8")).version;
+const cliVersion = JSON.parse(readFileSync(join(repoRoot, "packages/cli/package.json"), "utf8")).version;
+const sdkTgz = join(repoRoot, `.pack/actana-sdk-${sdkVersion}.tgz`);
+const cliTgz = join(repoRoot, `.pack/actana-cli-${cliVersion}.tgz`);
 if (!existsSync(sdkTgz) || !existsSync(cliTgz)) {
   fail("missing tarballs under .pack/");
 }
@@ -82,8 +85,8 @@ run(smokeRoot, "npm", ["install", sdkTgz, cliTgz, "--no-fund", "--no-audit"]);
 const installedCli = JSON.parse(
   readFileSync(join(smokeRoot, "node_modules/@actana/cli/package.json"), "utf8"),
 );
-if (installedCli.dependencies?.["@actana/sdk"] !== "0.5.0") {
-  fail(`packed CLI must depend on @actana/sdk@0.5.0, got ${installedCli.dependencies?.["@actana/sdk"]}`);
+if (installedCli.dependencies?.["@actana/sdk"] !== sdkVersion) {
+  fail(`packed CLI must depend on @actana/sdk@${sdkVersion}, got ${installedCli.dependencies?.["@actana/sdk"]}`);
 }
 
 const importProbe = `
@@ -108,8 +111,8 @@ if (!helpOut.includes("Cores") || !helpOut.includes("Search")) {
 }
 
 const versionOut = run(smokeRoot, actanaBin, ["-V"]);
-if (!versionOut.includes("0.5.0")) {
-  fail(`actana -V must print 0.5.0, got: ${versionOut}`);
+if (!versionOut.includes(cliVersion)) {
+  fail(`actana -V must print ${cliVersion}, got: ${versionOut}`);
 }
 
 // Dry-run publish against a throwaway prerelease so it can never collide with a version
