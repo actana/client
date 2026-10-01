@@ -16,6 +16,9 @@ const AWAIT_SH = ORCHESTRATION_SKILL_FILES["actana-sessions"]!["await.sh"]!;
 const SUBAGENT = ORCHESTRATION_SKILL_FILES["actana-subagent"]!["SKILL.md"]!;
 
 describe("the retired conventions are gone from every shipped file", () => {
+  const shipped = ORCHESTRATION_SKILL_NAMES.flatMap((skill) =>
+    Object.entries(ORCHESTRATION_SKILL_FILES[skill] ?? {}).map(([file, text]) => ({ where: `${skill}/${file}`, text })),
+  );
   const retired: Array<[string, RegExp]> = [
     ["the .actana/reports folder", /\.actana\/reports/],
     ["a -r<turn> report name", /-r<turn>|-r1\.md/],
@@ -24,18 +27,17 @@ describe("the retired conventions are gone from every shipped file", () => {
     ["a home-relative report path", /home-relative/],
   ];
 
-  for (const skill of ["actana-sessions", "actana-subagent"]) {
-    for (const [file, text] of Object.entries(ORCHESTRATION_SKILL_FILES[skill] ?? {})) {
-      for (const [what, pattern] of retired) {
-        it(`${skill}/${file} no longer teaches ${what}`, () => {
-          expect(text).not.toMatch(pattern);
-        });
-      }
-    }
-  }
+  it.each(retired)("no shipped file teaches %s", (_what, pattern) => {
+    expect(shipped.filter(({ text }) => pattern.test(text)).map(({ where }) => where)).toEqual([]);
+  });
 
   it("covers every skill this build ships", () => {
     expect([...ORCHESTRATION_SKILL_NAMES].sort()).toEqual(["actana-sessions", "actana-subagent"]);
+    expect(shipped.map(({ where }) => where).sort()).toEqual([
+      "actana-sessions/SKILL.md",
+      "actana-sessions/await.sh",
+      "actana-subagent/SKILL.md",
+    ]);
   });
 });
 
