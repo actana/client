@@ -299,6 +299,108 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
       });
     });
 
+    describe("watch", () => {
+      const shape = (changes: readonly { path: string; kind: string; deleted: boolean }[]): string[] =>
+        changes.map((c) => `${c.deleted ? "-" : "+"}${c.kind}:${c.path}`);
+
+      it("on an empty folder returns nothing and a cursor", async () => {
+        const first = await shared.watch();
+        expect(first.changes).toEqual([]);
+        expect(first.cursor).toBeTypeOf("string");
+        expect((await shared.watch(first.cursor)).changes).toEqual([]);
+      });
+
+      it("without a cursor returns everything that is there", async () => {
+        await shared.put("a.txt", "a");
+        await shared.put("d/b.txt", "bb");
+        const { changes } = await shared.watch();
+        expect(shape(changes)).toEqual(["+file:a.txt", "+file:d/b.txt"]);
+        expect(changes.find((c) => c.path === "d/b.txt")?.size).toBe(2);
+        expect(changes[0]?.modifiedAt).toBeInstanceOf(Date);
+      });
+
+      it("returns only what changed since the cursor, and then nothing", async () => {
+        await shared.put("old.txt", "old");
+        const base = await shared.watch();
+        await shared.put("new.txt", "new");
+        const next = await shared.watch(base.cursor);
+        expect(shape(next.changes)).toEqual(["+file:new.txt"]);
+        expect((await shared.watch(next.cursor)).changes).toEqual([]);
+        // The first cursor still means "since then": it sees the same change again.
+        expect(shape((await shared.watch(base.cursor)).changes)).toEqual(["+file:new.txt"]);
+      });
+
+      it("sees a file replaced with other content of the same size", async () => {
+        await shared.put("f.txt", "aaaa");
+        const base = await shared.watch();
+        await shared.put("f.txt", "bbbb");
+        expect(shape((await shared.watch(base.cursor)).changes)).toEqual(["+file:f.txt"]);
+      });
+
+      it("reports a deleted file and a deleted folder with its contents", async () => {
+        await shared.put("f.txt", "f");
+        await shared.put("d/a.txt", "a");
+        await shared.mkdir("d/empty");
+        const base = await shared.watch();
+        await shared.rm("f.txt");
+        await shared.rm("d/");
+        const { changes } = await shared.watch(base.cursor);
+        expect(shape(changes)).toEqual(["-file:d/a.txt", "-folder:d/empty", "-file:f.txt"]);
+        expect(changes.every((c) => c.size === undefined && c.modifiedAt === undefined)).toBe(true);
+      });
+
+      it("reports a new folder", async () => {
+        const base = await shared.watch();
+        await shared.mkdir("fresh");
+        expect(shape((await shared.watch(base.cursor)).changes)).toEqual(["+folder:fresh"]);
+      });
+
+      it("shows a move as the old path deleted and the new one changed", async () => {
+        await shared.put("a.txt", "a");
+        const base = await shared.watch();
+        await shared.move("a.txt", "b.txt");
+        expect(shape((await shared.watch(base.cursor)).changes)).toEqual(["-file:a.txt", "+file:b.txt"]);
+      });
+
+      it("refuses a cursor it did not issue", async () => {
+        for (const cursor of ["", "garbage", "H4sIAAAAAAAAA6tWKkktLlGyUlAqS8wpTVWqBQAu0o3KHQAAAA", "0".repeat(40)]) {
+          await expectCode(shared.watch(cursor), "invalid-cursor");
+        }
+      });
+    });
+
+    describe("signedUrl", () => {
+      it("downloads the file with no credentials, and expires in five minutes by default", async () => {
+        await shared.put("report.md", "# report");
+        const before = Date.now();
+        const signed = await shared.signedUrl("report.md");
+        const response = await fetch(signed.url);
+        expect(response.status).toBe(200);
+        expect(await response.text()).toBe("# report");
+        expect(signed.expiresAt).toBeInstanceOf(Date);
+        expect(signed.expiresAt.getTime()).toBeGreaterThan(before + 290_000);
+        expect(signed.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 300_000);
+      });
+
+      it("takes a shorter lifetime", async () => {
+        await shared.put("report.md", "x");
+        const signed = await shared.signedUrl("report.md", { expiresInSeconds: 60 });
+        expect(signed.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 60_000);
+        expect(signed.expiresAt.getTime()).toBeGreaterThan(Date.now() + 50_000);
+      });
+
+      it("refuses a lifetime that is not a whole number of at least one second", async () => {
+        for (const expiresInSeconds of [0, -5, 1.5, Number.NaN]) {
+          await expectCode(shared.signedUrl("a.txt", { expiresInSeconds }), "invalid-argument");
+        }
+      });
+
+      it("refuses a folder path", async () => {
+        await expectCode(shared.signedUrl("dir/"), "is-folder");
+        await expectCode(shared.signedUrl(""), "invalid-path");
+      });
+    });
+
     describe("paths never escape the Shared folder", () => {
       const bad = [
         "../outside.txt",
@@ -327,6 +429,9 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
           shared.rm(`${path}/`),
           shared.move(path, "dest.txt"),
           shared.move("keep.txt", path),
+          shared.upload("drop", [{ path, body: "x" }]),
+          shared.upload(path, [{ path: "a.txt", body: "x" }]),
+          shared.signedUrl(path),
         ];
         for (const call of calls) await expectCode(call, "invalid-path");
         expect((await shared.list("")).map((e) => e.path)).toEqual(["keep.txt"]);

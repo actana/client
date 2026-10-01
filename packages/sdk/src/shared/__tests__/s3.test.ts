@@ -225,3 +225,88 @@ describe("errors say nothing secret", () => {
     }
   });
 });
+
+describe("signedUrl and the key's lifetime", () => {
+  const params = (url: string): URLSearchParams => new URL(url).searchParams;
+
+  it("signs for the asked time when the key lives longer, and carries the session token", async () => {
+    const signed = await shared().signedUrl("a/b.txt", { expiresInSeconds: 600 });
+    expect(params(signed.url).get("X-Amz-Expires")).toBe("600");
+    expect(params(signed.url).get("X-Amz-Security-Token")).toBe(TOKEN);
+    expect(signed.expiresAt.getTime()).toBe(clock + 600_000);
+    expect(new URL(signed.url).pathname).toBe(`/${s3.bucket}/${PREFIX}a/b.txt`);
+  });
+
+  it("expires with the key when the key ends sooner than asked", async () => {
+    expiresAt = new Date(clock + 90_000);
+    const signed = await shared().signedUrl("a.txt", { expiresInSeconds: 3600 });
+    expect(params(signed.url).get("X-Amz-Expires")).toBe("90");
+    expect(signed.expiresAt.getTime()).toBe(expiresAt.getTime());
+  });
+
+  it("never signs past the key even when the clock has a fraction of a second", async () => {
+    clock += 400;
+    expiresAt = new Date(clock + 30_900);
+    const signed = await shared().signedUrl("a.txt", { expiresInSeconds: 3600 });
+    expect(signed.expiresAt.getTime()).toBeLessThanOrEqual(expiresAt.getTime());
+  });
+
+  it("refuses with expired when the key has run out, and caps the lifetime at S3's seven days", async () => {
+    expiresAt = new Date(clock - 1000);
+    expect((await refusal(shared().signedUrl("a.txt"))).code).toBe("expired");
+    expiresAt = new Date(clock + 30 * 86400_000);
+    const signed = await shared().signedUrl("a.txt", { expiresInSeconds: 30 * 86400 });
+    expect(params(signed.url).get("X-Amz-Expires")).toBe("604800");
+  });
+
+  it("makes no request", async () => {
+    await shared().signedUrl("a.txt");
+    expect(s3.requests).toEqual([]);
+  });
+});
+
+describe("the store's refusals", () => {
+  const respondWith = (status: number, code: string): typeof fetch => async () =>
+    new Response(`<Error><Code>${code}</Code><Message>m</Message></Error>`, { status });
+  const api = (fetchImpl: typeof fetch): CoreShared =>
+    createS3CoreShared({
+      endpoint: s3.endpoint,
+      bucket: s3.bucket,
+      prefix: "cores/core-a",
+      credentials: { get: async () => ({ accessKeyId: "A", secretAccessKey: SECRET, sessionToken: TOKEN, expiresAt }) },
+      fetch: fetchImpl,
+    });
+
+  it.each([
+    [403, "AccessDenied", "forbidden"],
+    [400, "ExpiredToken", "expired"],
+    [404, "NoSuchKey", "not-found"],
+    [503, "SlowDown", "unavailable"],
+  ] as const)("HTTP %i %s becomes %s", async (status, code, expected) => {
+    expect((await refusal(api(respondWith(status, code)).get("a.txt"))).code).toBe(expected);
+  });
+
+  it("an unreachable store is unavailable and the message names no address", async () => {
+    const error = await refusal(
+      api(async () => {
+        throw new TypeError("fetch failed: connect ECONNREFUSED 127.0.0.1:9");
+      }).get("a.txt"),
+    );
+    expect(error.code).toBe("unavailable");
+    expect(error.message).not.toContain("127.0.0.1");
+  });
+});
+
+describe("watch cursors are bound to the Shared folder", () => {
+  it("another Core's cursor is refused", async () => {
+    await shared().put("a.txt", "a");
+    const mine = (await shared().watch()).cursor;
+    const other = createS3CoreShared({
+      endpoint: s3.endpoint,
+      bucket: s3.bucket,
+      prefix: "cores/core-b",
+      credentials: { get: async () => ({ accessKeyId: "A", secretAccessKey: SECRET, sessionToken: TOKEN, expiresAt }) },
+    });
+    expect((await refusal(other.watch(mine))).code).toBe("invalid-cursor");
+  });
+});

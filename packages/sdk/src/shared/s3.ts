@@ -6,11 +6,13 @@
 // the folder path with a trailing slash (`<prefix>docs/`), the convention of the S3 console.
 import type { SharedKey } from "../shared-key/types.ts";
 import { parseFilePath, parseSharedPath } from "./path.ts";
-import { canonicalPath, signRequest } from "./sigv4.ts";
+import { decodeCursor, encodeCursor, type Snapshot } from "./cursor.ts";
+import { canonicalPath, presignGetUrl, signRequest } from "./sigv4.ts";
 import {
   CoreSharedError,
   CoreSharedPartialError,
   type CoreShared,
+  type SharedChange,
   type SharedEntry,
   type SharedFile,
   type SharedSignedUrl,
@@ -42,6 +44,9 @@ interface Reply {
 
 const utf8 = new TextEncoder();
 const MARKER_TYPE = "application/x-directory";
+/** S3 refuses a presigned URL valid for longer than 7 days. */
+const MAX_PRESIGN_SECONDS = 604800;
+const DEFAULT_SIGNED_URL_SECONDS = 300;
 
 const unescapeXml = (text: string): string =>
   text
@@ -339,11 +344,53 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
       }
       return written;
     },
-    async watch(): Promise<SharedWatchResult> {
-      throw unavailable("watch: not implemented yet");
+    // S3 has no change feed. Each call lists everything under the prefix and diffs it against the
+    // listing the cursor remembers (see cursor.ts). A move shows as a delete plus a change.
+    async watch(since): Promise<SharedWatchResult> {
+      const before: Snapshot = since === undefined ? new Map() : decodeCursor(rootKey, since);
+      const current: Snapshot = new Map();
+      const details = new Map<string, Listed>();
+      for (const object of await allKeys(rootKey)) {
+        if (object.key === rootKey) continue; // the root's own marker
+        const folder = object.key.endsWith("/");
+        const path = relativeOf(folder ? object.key.slice(0, -1) : object.key);
+        const kind = folder ? "folder" : "file";
+        current.set(path, `${kind}:${object.size}:${object.modified.getTime()}:${object.etag}`);
+        details.set(path, object);
+      }
+      const changes: SharedChange[] = [];
+      for (const [path, state] of current) {
+        if (before.get(path) === state) continue;
+        const object = details.get(path) as Listed;
+        changes.push(
+          state.startsWith("folder:")
+            ? { path, kind: "folder", deleted: false, modifiedAt: object.modified }
+            : { path, kind: "file", deleted: false, size: object.size, modifiedAt: object.modified },
+        );
+      }
+      for (const [path, state] of before) {
+        if (!current.has(path)) changes.push({ path, kind: state.startsWith("folder:") ? "folder" : "file", deleted: true });
+      }
+      changes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      return { changes, cursor: encodeCursor(rootKey, current) };
     },
-    async signedUrl(): Promise<SharedSignedUrl> {
-      throw unavailable("signedUrl: not implemented yet");
+
+    // Signed locally, no request. It never outlives the key that signs it: a URL valid longer than
+    // the key would only be refused by the store once the key's session ends.
+    async signedUrl(path, urlOptions = {}): Promise<SharedSignedUrl> {
+      const parsed = parseFilePath(path);
+      const asked = urlOptions.expiresInSeconds ?? DEFAULT_SIGNED_URL_SECONDS;
+      if (!Number.isInteger(asked) || asked < 1) throw new CoreSharedError("invalid-argument", "expiresInSeconds must be a whole number of at least 1");
+      const credentials = await options.credentials.get();
+      const nowMs = now();
+      const left = Math.floor((credentials.expiresAt.getTime() - nowMs) / 1000);
+      if (left < 1) throw new CoreSharedError("expired", "the key has expired");
+      const seconds = Math.min(asked, MAX_PRESIGN_SECONDS, left);
+      const startMs = Math.floor(nowMs / 1000) * 1000;
+      return {
+        url: presignGetUrl({ endpoint, path: keyPath(fileKey(parsed.relative)), credentials, region, nowMs: startMs, expiresInSeconds: seconds }),
+        expiresAt: new Date(startMs + seconds * 1000),
+      };
     },
   };
 }
