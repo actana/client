@@ -42,7 +42,6 @@ import {
 import { TerminalScreen, DEFAULT_COLS, DEFAULT_ROWS } from "@actana/sdk/core";
 import { harnessResumeCommand } from "./harness-resume.ts";
 import type {
-  CoreLinkProjectSnapshot,
   CoreLinkPtySpawnHarness,
   CoreLinkSessionLockState,
   CoreLinkSessionRow,
@@ -54,7 +53,7 @@ export const KNOWN_HARNESSES: readonly CoreLinkPtySpawnHarness[] = Object.keys(
   HARNESS_LAUNCH_COMMANDS,
 ) as CoreLinkPtySpawnHarness[];
 
-/** The harness a `session start` gets when neither the flag nor the Project names one. */
+/** The harness a `session start` gets when `--harness` is omitted. */
 export const DEFAULT_HARNESS: CoreLinkPtySpawnHarness = "claude-code";
 
 /** Is this string one of the harnesses the Core can be asked for? */
@@ -76,7 +75,6 @@ export function isKnownHarness(value: string): value is CoreLinkPtySpawnHarness 
  */
 export type SessionGatewayErrorKind =
   | "no-such-session"
-  | "no-such-project"
   | "not-running"
   | "already-running"
   | "nothing-to-resume"
@@ -99,9 +97,6 @@ export type SessionRow = {
   harness: string;
   /** The Core's status for the Session — `running`, `finished`, `needs-input`, … */
   status: string;
-  projectId: string;
-  /** The Project's name, or null when the Session points at a Project the Core did not list. */
-  project: string | null;
   /** The live PTY, or null when nothing is running for this Session right now. */
   ptyId: string | null;
   /** Whether a harness process is running for this Session — `ptyId !== null`, named. */
@@ -117,15 +112,11 @@ export type SessionRow = {
 };
 
 export type SessionStartRequest = {
-  /** A Project id, or a Project name, exactly as it was typed. */
-  project: string;
   /** The starting prompt. Handed to the Core to deliver; never timed here. */
   prompt?: string;
   title?: string;
-  /** `--harness`, or null to take the Project's remembered one (ADR 0017). */
+  /** `--harness`, or null for {@link DEFAULT_HARNESS}. */
   harness: CoreLinkPtySpawnHarness | null;
-  /** `--cwd` on the **Core's** machine, or null for the Project root. */
-  cwd: string | null;
   dangerouslySkipPermissions: boolean;
 };
 
@@ -191,9 +182,6 @@ export type StartedSession = {
    * it either way (#289 A).
    */
   reportsTurnStart: boolean | null;
-  projectId: string;
-  /** The Project's name, when the start resolved one. */
-  project: string | null;
   /**
    * Block until the Core reports this Session settled.
    *
@@ -226,8 +214,8 @@ export type SessionLogs = {
 
 /** Everything the `session` noun asks of a Core, and nothing else. */
 export type SessionGateway = {
-  /** `null` lists every Project's Sessions; a string filters by Project name or id. */
-  list(project: string | null): Promise<SessionRow[]>;
+  /** Every Session on this Core. Never filters by Project — there are none. */
+  list(): Promise<SessionRow[]>;
   start(request: SessionStartRequest): Promise<StartedSession>;
   resume(request: SessionResumeRequest): Promise<StartedSession>;
   logs(sessionId: string): Promise<SessionLogs>;
@@ -282,27 +270,34 @@ export const openSessionGateway: OpenSessionGateway = async (blob, opts) => {
     requestTimeoutMs: opts.timeoutMs,
   });
   await client.connect();
-  return new CoreLinkSessionGateway(client);
+  return sessionGatewayFor(client);
 };
+
+/**
+ * Bind the session verbs to an already-connected client.
+ *
+ * Exported so a unit test can prove {@link SessionGateway.list} never dials a
+ * Project frame — a 0.5.0 Core answers `projectsList` with "unhandled frame
+ * type" (actana/control#555 / PR 618; CI run 36851520551).
+ */
+export function sessionGatewayFor(client: CoreClient): SessionGateway {
+  return new CoreLinkSessionGateway(client);
+}
 
 class CoreLinkSessionGateway implements SessionGateway {
   constructor(private readonly client: CoreClient) {}
 
-  async list(project: string | null): Promise<SessionRow[]> {
-    const projects = await this.client.projectsList();
-    const projectId = project === null ? undefined : this.resolveProject(projects, project).projectId;
-
+  async list(): Promise<SessionRow[]> {
     // Two reads because they answer two questions: `sessionsList` is the
     // Session view (status, the live PTY, this client's lock) and the Session rows
-    // carry what a person reads a list by — the title, the harness, the Project.
-    // Neither frame carries the other's fields, and joining here costs one round
-    // trip against a list nobody paginates.
+    // carry what a person reads a list by — the title and the harness. Neither
+    // frame carries the other's fields. No `projectsList`: a 0.5.0 Core answers
+    // that with "unhandled frame type" (actana/control#555 / PR 618).
     const [sessions, rows] = await Promise.all([
-      this.client.sessionsList(projectId),
-      this.client.sessionRowsList(projectId),
+      this.client.sessionsList(),
+      this.client.sessionRowsList(),
     ]);
     const bySessionRow = new Map(rows.sessions.map((row) => [row.sessionId, row]));
-    const projectNames = new Map(projects.map((p) => [p.projectId, p.name]));
 
     return sessions.map((session) => {
       const row = bySessionRow.get(session.sessionId);
@@ -311,8 +306,6 @@ class CoreLinkSessionGateway implements SessionGateway {
         title: row?.title ?? "(untitled)",
         harness: row?.agent ?? "(unknown)",
         status: session.status,
-        projectId: row?.projectId ?? "",
-        project: row ? (projectNames.get(row.projectId) ?? null) : null,
         ptyId: session.ptyId,
         live: session.ptyId !== null,
         writable: session.lock?.writable ?? null,
@@ -323,23 +316,15 @@ class CoreLinkSessionGateway implements SessionGateway {
   }
 
   async start(request: SessionStartRequest): Promise<StartedSession> {
-    const projects = await this.client.projectsList();
-    const project = this.resolveProject(projects, request.project);
-    const harness = request.harness ?? rememberedHarness(project) ?? DEFAULT_HARNESS;
+    const harness = request.harness ?? DEFAULT_HARNESS;
 
     const session = await this.begin({
-      projectId: project.projectId,
-      cwd: request.cwd ?? project.path,
       harness,
       title: request.title ?? titleFor(request.prompt),
       prompt: request.prompt,
       dangerouslySkipPermissions: request.dangerouslySkipPermissions,
     });
-    return wrap(session, {
-      projectId: project.projectId,
-      project: project.name,
-      harness,
-    });
+    return wrap(session, { harness });
   }
 
   async resume(request: SessionResumeRequest): Promise<StartedSession> {
@@ -374,10 +359,8 @@ class CoreLinkSessionGateway implements SessionGateway {
       );
     }
 
-    const project = await this.projectFor(row.projectId);
     const session = await this.begin({
       sessionId: row.sessionId,
-      cwd: project.path,
       harness: row.agent,
       command: harnessResumeCommand(row.agent, row.claudeSessionId, {
         dangerouslySkipPermissions: request.dangerouslySkipPermissions,
@@ -385,11 +368,7 @@ class CoreLinkSessionGateway implements SessionGateway {
       prompt: request.prompt,
       dangerouslySkipPermissions: request.dangerouslySkipPermissions,
     });
-    return wrap(session, {
-      projectId: project.projectId,
-      project: project.name,
-      harness: row.agent,
-    });
+    return wrap(session, { harness: row.agent });
   }
 
   async logs(sessionId: string): Promise<SessionLogs> {
@@ -475,8 +454,6 @@ class CoreLinkSessionGateway implements SessionGateway {
     // Session; refusing it here would make `wait` the odd one out over a row
     // this only reads two display fields off.
     const row = await this.findAnySessionRow(sessionId);
-    const project =
-      row === null ? null : await this.projectFor(row.projectId).catch(() => null);
 
     let session: CoreSession;
     try {
@@ -547,8 +524,6 @@ class CoreLinkSessionGateway implements SessionGateway {
     }
 
     return wrap(session, {
-      projectId: row?.projectId ?? "",
-      project: project?.name ?? null,
       harness: row?.agent ?? null,
       afterEventId,
     });
@@ -556,9 +531,7 @@ class CoreLinkSessionGateway implements SessionGateway {
 
   /** Start a Session, translating the SDK's refusal into a gateway error. */
   private async begin(opts: {
-    projectId?: string;
     sessionId?: string;
-    cwd: string;
     harness: CoreLinkPtySpawnHarness;
     title?: string;
     command?: string;
@@ -567,7 +540,6 @@ class CoreLinkSessionGateway implements SessionGateway {
   }): Promise<CoreSession> {
     try {
       return await CoreSession.start(this.client, {
-        ...(opts.projectId ? { projectId: opts.projectId } : {}),
         ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
         ...(opts.title ? { title: opts.title } : {}),
         ...(opts.command ? { command: opts.command } : {}),
@@ -576,7 +548,6 @@ class CoreLinkSessionGateway implements SessionGateway {
         // skip-permissions flag *only* on a spawn that also set this option, so
         // the two travel together or not at all.
         ...(opts.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
-        cwd: opts.cwd,
         harness: opts.harness,
       });
     } catch (err) {
@@ -625,50 +596,7 @@ class CoreLinkSessionGateway implements SessionGateway {
     return row;
   }
 
-  private async projectFor(projectId: string): Promise<CoreLinkProjectSnapshot> {
-    const projects = await this.client.projectsList();
-    const project = projects.find((row) => row.projectId === projectId);
-    if (!project) {
-      throw new SessionGatewayError(
-        "no-such-project",
-        `this Core no longer has the project ${projectId} that session belongs to`,
-      );
-    }
-    return project;
-  }
 
-  /**
-   * A Project by id, or by name.
-   *
-   * By id first, because an id is unambiguous and a name is what somebody types.
-   * A name matching two Projects is an error rather than a coin toss: starting a
-   * Session in the wrong repository is not a mistake a person notices quickly.
-   */
-  private resolveProject(
-    projects: CoreLinkProjectSnapshot[],
-    wanted: string,
-  ): CoreLinkProjectSnapshot {
-    const byId = projects.find((project) => project.projectId === wanted);
-    if (byId) return byId;
-
-    const byName = projects.filter((project) => project.name === wanted);
-    if (byName.length === 1) return byName[0]!;
-    if (byName.length > 1) {
-      throw new SessionGatewayError(
-        "no-such-project",
-        `"${wanted}" names ${byName.length} projects on this Core — use the project id: ${byName
-          .map((project) => project.projectId)
-          .join(", ")}`,
-      );
-    }
-    const known = projects.map((project) => project.name).join(", ");
-    throw new SessionGatewayError(
-      "no-such-project",
-      known.length > 0
-        ? `this Core has no project "${wanted}". It has: ${known}`
-        : `this Core has no projects registered`,
-    );
-  }
 }
 
 /**
@@ -686,8 +614,6 @@ class CoreLinkSessionGateway implements SessionGateway {
 function wrap(
   session: CoreSession,
   opts: {
-    projectId: string;
-    project: string | null;
     harness: string | null;
     afterEventId?: number;
   },
@@ -699,8 +625,6 @@ function wrap(
     harness: opts.harness,
     command: session.command,
     reportsTurnStart: session.reportsTurnStart,
-    projectId: opts.projectId,
-    project: opts.project,
     wait: async (waitOpts) => {
       const idle = await session.waitForTurnEnd({
         ...(afterEventId > 0 ? { afterEventId } : {}),
@@ -715,21 +639,6 @@ function wrap(
     screen: () => session.screen(),
     dispose: () => session.dispose(),
   };
-}
-
-/**
- * The Project's remembered harness, when it names one this build knows.
- *
- * A Core fact (ADR 0017), so the CLI reads it rather than keeping its own
- * default per Project. An unrecognised value falls through to
- * {@link DEFAULT_HARNESS} rather than being sent — a Core that remembers a
- * harness this build has never heard of is a Core to update, not a spawn to
- * fail.
- */
-function rememberedHarness(project: CoreLinkProjectSnapshot): CoreLinkPtySpawnHarness | null {
-  if (!project.rememberHarnessSettings) return null;
-  const saved = project.savedHarness;
-  return saved !== null && isKnownHarness(saved) ? saved : null;
 }
 
 /**

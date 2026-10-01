@@ -198,9 +198,6 @@ describe("CoreClient", () => {
     // No `code` on this frame, and none invented: a reader takes the code when
     // it is there and falls back to the message when it is not.
     expect((err as CoreLinkRequestError).code).toBeUndefined();
-    await expect(c.projectsMutate({ op: "rename", projectId: "p1", name: "n" })).rejects.toThrow(
-      "Folder not found",
-    );
   });
 
   it("carries a coded error frame's code onto the rejection", () => {

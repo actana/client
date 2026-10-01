@@ -16,7 +16,6 @@ import type {
   CoreConnectFn,
   CoreProbeFn,
   OpenCoreShellFn,
-  OpenProjectFilesFn,
   OpenSessionAttachFn,
   OpenSessionGateway,
 } from "./client-ports.ts";
@@ -75,8 +74,6 @@ export type ClientDeps = {
   pairing: CorePairingPort;
   /** How the `session` noun reaches a Core. */
   openSessions: OpenSessionGateway;
-  /** How `project cp` and `project files` reach a Core's file surface. */
-  openFiles: OpenProjectFilesFn;
   /** Epoch ms. Only the bearer-expiry line reads it. */
   now: () => number;
   /** The operator's terminal — raw mode, keystrokes, size, signals. */
