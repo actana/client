@@ -1,6 +1,6 @@
 // The CoreShared interface: one view of a Core's Shared folder, whichever way it is reached.
-// Mode-agnostic on purpose: nothing here names S3. The direct-S3 mode (./s3.ts) is one
-// implementation; the through-the-Core mode is a later one and must pass the same contract suite.
+// Mode-agnostic on purpose: nothing here names S3. The direct-S3 mode (./s3.ts) and the
+// through-the-Core mode (./core.ts) both implement it and must pass the same contract suite.
 
 /**
  * Paths are relative to the Core's Shared folder root, use `/` and never escape it.
