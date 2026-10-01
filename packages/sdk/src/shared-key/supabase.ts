@@ -71,41 +71,43 @@ export function coreStorageRestriction(bucket: string, prefix: string, coreId: s
  */
 export function supabaseCoreStorageRlsSql(bucket: string): string {
   const b = bucket.replaceAll("'", "''");
+  // starts_with: literal prefix match. LIKE would treat '_' in a Core id as a wildcard.
   return `-- Actana Shared-folder: one Core per Auth user.
 -- The issuer sets auth.jwt() -> 'app_metadata' ->> 'allowed_prefix' to
 -- '<prefix>/<core-id>/'. Without these policies the issued JWT is not limited.
 -- Run once per project (adjust the bucket name).
+-- Use starts_with (not LIKE): Core ids may contain '_', which LIKE treats as a wildcard.
 
 CREATE POLICY actana_core_select ON storage.objects
   FOR SELECT TO authenticated
   USING (
     bucket_id = '${b}'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_insert ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (
     bucket_id = '${b}'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_update ON storage.objects
   FOR UPDATE TO authenticated
   USING (
     bucket_id = '${b}'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   )
   WITH CHECK (
     bucket_id = '${b}'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_delete ON storage.objects
   FOR DELETE TO authenticated
   USING (
     bucket_id = '${b}'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 `;
 }

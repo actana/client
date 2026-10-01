@@ -162,7 +162,7 @@ describe("createSupabaseKeyIssuer", () => {
   });
 });
 
-describe("supabaseCoreStorageRlsSql (R2)", () => {
+describe("supabaseCoreStorageRlsSql (R2/R4)", () => {
   it("ships SELECT/INSERT/UPDATE/DELETE policies that read allowed_prefix from the JWT", () => {
     const sql = supabaseCoreStorageRlsSql("actana-shared");
     expect(sql).toMatch(/CREATE POLICY/i);
@@ -174,5 +174,17 @@ describe("supabaseCoreStorageRlsSql (R2)", () => {
     expect(sql).toContain("allowed_prefix");
     expect(sql).toContain("auth.jwt()");
     expect(sql).toContain("app_metadata");
+  });
+
+  it("matches the Core prefix literally with starts_with, not LIKE (R4)", () => {
+    // LIKE treats '_' in a Core id (e.g. team_a) as a single-character wildcard.
+    const sql = supabaseCoreStorageRlsSql("actana-shared");
+    const predicate =
+      "starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')";
+    expect(sql).toContain(predicate);
+    // Every policy arm must use the literal predicate (select/insert/update×2/delete = 5).
+    expect(sql.split(predicate)).toHaveLength(6);
+    expect(sql).not.toMatch(/name\s+LIKE\b/i);
+    expect(sql).not.toContain("|| '%'");
   });
 });

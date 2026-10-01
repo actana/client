@@ -86,41 +86,44 @@ role. Apply the SQL from `supabaseCoreStorageRlsSql(bucket)` once per project
 -- The issuer sets auth.jwt() -> 'app_metadata' ->> 'allowed_prefix' to
 -- '<prefix>/<core-id>/'. Without these policies the issued JWT is not limited.
 -- Run once per project (adjust the bucket name).
+-- Use starts_with (not LIKE): Core ids may contain '_', which LIKE treats as a wildcard.
 
 CREATE POLICY actana_core_select ON storage.objects
   FOR SELECT TO authenticated
   USING (
     bucket_id = 'actana-shared'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_insert ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (
     bucket_id = 'actana-shared'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_update ON storage.objects
   FOR UPDATE TO authenticated
   USING (
     bucket_id = 'actana-shared'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   )
   WITH CHECK (
     bucket_id = 'actana-shared'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 
 CREATE POLICY actana_core_delete ON storage.objects
   FOR DELETE TO authenticated
   USING (
     bucket_id = 'actana-shared'
-    AND name LIKE (auth.jwt() -> 'app_metadata' ->> 'allowed_prefix') || '%'
+    AND starts_with(name, auth.jwt() -> 'app_metadata' ->> 'allowed_prefix')
   );
 ```
 
-(Same text as `supabaseCoreStorageRlsSql("actana-shared")`.)
+(Same text as `supabaseCoreStorageRlsSql("actana-shared")`.) These policies add to
+whatever the project already has: a broader existing policy for `authenticated`
+on the bucket still applies (Postgres RLS is OR-ed across permissive policies).
 
 ## Isolation tests
 
