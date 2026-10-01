@@ -281,8 +281,8 @@ describe("actana session ls", () => {
       ["session", "send", "session_1", "hi", "--json", "--verbose"],
       ["session", "kill", "session_1", "--json", "--verbose"],
       ["session", "ls", "--json", "--verbose"],
-      ["session", "wait", "session_1", "--json", "--verbose"],
-      ["session", "send", "session_1", "hi", "--wait", "--turn", "3", "--json", "--verbose"],
+      ["session", "wait", "session_1", "--wait-timeout", "2", "--json", "--verbose"],
+      ["session", "send", "session_1", "hi", "--wait", "--turn", "3", "--wait-timeout", "2", "--json", "--verbose"],
     ]) {
       const run = await cli().run(argv, { sessions: gateway, shared: shared.open });
       const where = argv.join(" ");
@@ -517,7 +517,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     const w = world();
     w.folder().seed(REPORT_1, FINISHED);
 
-    const run = await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "2"], { sessions: w.gateway, shared: w.shared.open });
 
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
     expect(run.out).toEqual([REPORT_1]);
@@ -530,7 +530,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     const w = world();
     setTimeout(() => void w.folder().put(REPORT_1, FINISHED), 25);
 
-    const run = await cli().run(["session", "wait", "session_1", "--json"], { sessions: w.gateway, shared: w.shared.open });
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "2", "--json"], { sessions: w.gateway, shared: w.shared.open });
 
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
     expect(JSON.parse(run.out.join("\n"))).toEqual({
@@ -557,7 +557,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
       void w.folder().put(REPORT_1, FINISHED);
     }, 70);
 
-    const run = await cli().run(["session", "wait", "session_1", "--json"], { sessions: w.gateway, shared: w.shared.open });
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "2", "--json"], { sessions: w.gateway, shared: w.shared.open });
 
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
     expect(JSON.parse(run.out.join("\n")).report).toBe(FINISHED);
@@ -598,7 +598,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     expect(stale.err.join("\n")).toContain("sessions/session_1/report-2.md did not appear");
 
     setTimeout(() => void w.folder().put(REPORT_2, FINISHED), 20);
-    const fresh = await cli().run(["session", "wait", "session_1", "--turn", "2"], {
+    const fresh = await cli().run(["session", "wait", "session_1", "--turn", "2", "--wait-timeout", "2"], {
       sessions: w.gateway,
       shared: w.shared.open,
     });
@@ -613,7 +613,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     w.folder().seed(REPORT_2, FINISHED);
     w.folder().seed("sessions/session_1/notes.md", "not a report");
 
-    const latest = await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+    const latest = await cli().run(["session", "wait", "session_1", "--wait-timeout", "2"], { sessions: w.gateway, shared: w.shared.open });
     expect(latest.out).toEqual([REPORT_2]);
 
     const none = world();
@@ -657,7 +657,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     const w = world();
     w.folder().seed(REPORT_1, FINISHED);
 
-    await cli().run(["session", "wait", "session_1"], { sessions: w.gateway, shared: w.shared.open });
+    await cli().run(["session", "wait", "session_1", "--wait-timeout", "2"], { sessions: w.gateway, shared: w.shared.open });
 
     expect(w.shared.closed.count).toBe(1);
   });
@@ -706,7 +706,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
         },
       });
 
-      const run = await cli().run(["session", "send", "session_1", "carry", "on", "--enter", "--wait", "--json"], {
+      const run = await cli().run(["session", "send", "session_1", "carry", "on", "--enter", "--wait", "--wait-timeout", "2", "--json"], {
         sessions: gateway,
         shared: w.shared.open,
       });
@@ -733,7 +733,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
         },
       });
 
-      const run = await cli().run(["session", "send", "session_1", "go", "--wait"], { sessions: gateway, shared: w.shared.open });
+      const run = await cli().run(["session", "send", "session_1", "go", "--wait", "--wait-timeout", "2"], { sessions: gateway, shared: w.shared.open });
 
       expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
       expect(order.indexOf("cursor")).toBeLessThan(order.indexOf("write"));
