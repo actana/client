@@ -99,7 +99,7 @@ describe("a slow consumer sets the pace", () => {
     );
 
     let consumed = 0;
-    for await (const _line of core.project(rig!.projectId).files.upload({
+    for await (const _line of core.files.upload({
       path: "tree",
       kind: "tar",
       body: (async function* () {
@@ -136,7 +136,7 @@ describe("a slow consumer sets the pace", () => {
     );
 
     let consumed = 0;
-    for await (const _entry of core.project(rig!.projectId).files.list()) {
+    for await (const _entry of core.files.list()) {
       consumed += 1;
       await dawdle();
       if (consumed === 4) break;
@@ -171,7 +171,7 @@ describe("a slow consumer sets the pace", () => {
       return new Response('{"type":"done","entries":0,"bytes":0}\n', { status: 200 });
     });
 
-    const progress = core.project(rig!.projectId).files.upload({ path: "big.bin", body: source });
+    const progress = core.files.upload({ path: "big.bin", body: source });
     for await (const _line of progress) break;
 
     expect(produced).toBeLessThanOrEqual(5);
@@ -197,7 +197,7 @@ describe("a slow consumer sets the pace", () => {
       return new Response('{"type":"done","entries":0,"bytes":0}\n', { status: 200 });
     });
 
-    for await (const _line of core.project(rig!.projectId).files.upload({
+    for await (const _line of core.files.upload({
       path: "abandoned.bin",
       body: source,
     })) {
@@ -228,7 +228,7 @@ describe("over a real socket, the whole chain backpressures", () => {
     const { packDirectory } = await import("@actana/core/files-tar");
 
     let consumed = 0;
-    const progress = client.project(rig.projectId).files.upload({
+    const progress = client.files.upload({
       path: "tree",
       kind: "tar",
       body: packDirectory(source),

@@ -151,7 +151,7 @@ describe("CoreClient", () => {
     const { client: c, dial } = await connected(core);
 
     const [spawned, found, replayed] = await Promise.all([
-      c.spawn({ sessionId: "t1", cwd: "/tmp", command: "claude", agent: "claude-code" }),
+      c.spawn({ sessionId: "t1", command: "claude", agent: "claude-code" }),
       c.findBySession("t1"),
       c.replay("pty-1", 3),
     ]);
