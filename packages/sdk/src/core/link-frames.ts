@@ -979,7 +979,7 @@ export type CoreLinkMultiConnectionCapability = { version: 1 };
 /**
  * The `files` capability, announced on `ready` (#165 F9, ADR 0024 D11).
  *
- * Says that this Core answers the `/v1/projects/:projectId/files` routes on its
+ * Says that this Core answers the `/v1/files` routes (relative to the home) on its
  * **HTTPS origin** — the same server this WebSocket is mounted on, reachable at
  * {@link CoreConnection.httpsBaseUrl}. Nothing about the capability changes the
  * core link itself: no frame is added, none changes meaning, and not one byte
@@ -1602,8 +1602,8 @@ export type CoreLinkServerFrame =
  * `projectId` filter on the row and live-session list frames, and `cwd` on
  * harness/shell spawn (every Session starts in `~`). Hard cut, no alias and no
  * dual-read: a 0.18 Core and this build refuse each other at the version gate.
- * The Files HTTPS routes stay at `/v1/projects/:id/files` until
- * actana/control#557 re-roots them (client issue 10 part 4).
+ * The Files HTTPS routes are `/v1/files`, relative to the home (actana/control#557,
+ * client issue 10 part 4); the SDK's Files client sends nothing else.
  *
  * Patch stays 0 — see {@link coreLinkProtocolCompatible}, which compares
  * major.minor only.

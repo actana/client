@@ -56,9 +56,9 @@ export type ParsedArgs = {
   kind: string[];
   /** `--limit <n>` — stop after this many rows. Raw, for the same reason as `since`. */
   limit: string | null;
-  // ─── The `project` noun's file flags (#168) ───
+  // ─── `files ls`'s flags (#10) ───
   /**
-   * `--depth <n>` — how far `project files` descends. Raw, like `--limit`: the
+   * `--depth <n>` — how far `files ls` descends. Raw, like `--limit`: the
    * verb that reads it is the one that can say what `--depth all` means.
    */
   depth: string | null;
@@ -77,7 +77,7 @@ export type ParsedArgs = {
   waitTimeout: string | null;
   /** `--turn <n>`, unparsed: which turn's report `session send` / `session wait` means. */
   turn: string | null;
-  /** `--harness <name>`, or null to take the Project's remembered one. */
+  /** `--harness <name>`, or null to take the default harness. */
   harness: string | null;
   /** `--cwd <path>`: a directory on the **Core's** machine. */
   cwd: string | null;
@@ -201,7 +201,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     if (flagsEnded || arg === "-" || !arg.startsWith("-")) {
       // A bare `-` is a positional: it is the conventional name for stdin, and
-      // `actana project cp - remote:path` is a sentence somebody will type.
+      // `actana files put - notes.md` is a sentence somebody will type.
       parsed.positionals.push(arg);
       continue;
     }

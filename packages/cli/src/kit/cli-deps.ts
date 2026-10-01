@@ -20,6 +20,7 @@ import type {
   OpenSessionGateway,
 } from "./client-ports.ts";
 import type { ActanaSystem, ReleaseFetcher } from "./machine-ports.ts";
+import type { OpenFilesFn } from "../core/files-gateway.ts";
 import type { OpenSharedFn } from "../core/shared-gateway.ts";
 
 /** Prompts the client nouns may use without pulling in machine modules. */
@@ -85,6 +86,8 @@ export type ClientDeps = {
   openAttach: OpenSessionAttachFn;
   /** How the `shared` noun reaches a Core's Shared folder. */
   openShared: OpenSharedFn;
+  /** How the `files` noun reaches a Core's home folder. */
+  openFiles: OpenFilesFn;
 };
 
 export type MachineDeps = ClientDeps & {

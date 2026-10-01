@@ -4,7 +4,7 @@
 // Two properties, and the second is the one that makes this a gate rather than
 // an error message: nothing is sent. A client that called the route anyway
 // would get a `404` off a Core that simply predates the surface, and would then
-// have to guess whether it had found a missing Project, a missing file, a
+// have to guess whether it had found a missing home, a missing file, a
 // routing mistake or an old Core. The whole point of announcing the capability
 // on `ready` is that the client never has to guess.
 import { afterAll, afterEach, describe, expect, it } from "vitest";
@@ -40,19 +40,18 @@ async function silentCore(): Promise<CoreClient> {
 describe("a Core that does not announce `files`", () => {
   it("refuses all three calls, and sends nothing", async () => {
     const core = await silentCore();
-    const project = core.project(rig!.projectId);
 
     // The routes are genuinely there and would answer — the rig is the same one
     // every other suite uses. That is what makes this test about the *gate*: a
     // client reading the capability stops, and one that ignored it would sail
     // through and succeed here, which is the bug F9 exists to prevent from
     // being written in the first place.
-    await expect(project.files.download({ path: "a.txt" })).rejects.toThrow(
+    await expect(core.files.download({ path: "a.txt" })).rejects.toThrow(
       CoreFilesUnavailableError,
     );
-    await expect(project.files.list().next()).rejects.toThrow(CoreFilesUnavailableError);
+    await expect(core.files.list().next()).rejects.toThrow(CoreFilesUnavailableError);
     await expect(
-      project.files.upload({ path: "b.txt", body: chunk("b") }).next(),
+      core.files.upload({ path: "b.txt", body: chunk("b") }).next(),
     ).rejects.toThrow(CoreFilesUnavailableError);
 
     expect(rig!.requests).toEqual([]);
@@ -61,14 +60,14 @@ describe("a Core that does not announce `files`", () => {
   it("gives a reason an operator can act on, naming the capability", async () => {
     const core = await silentCore();
 
-    const error = await project(core).catch((err: unknown) => err);
+    const error = await download(core).catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(CoreFilesUnavailableError);
     const { reason, message } = error as CoreFilesUnavailableError;
     // Not "unavailable", not "404", not "an error occurred". The three things an
     // operator needs are: which operation, that the capability is what is
     // missing, and that this is not something they broke.
-    expect(message).toContain("reading a Project's files is unavailable on this Core");
+    expect(message).toContain("reading the Core's files is unavailable on this Core");
     expect(reason).toContain("`files` capability");
     expect(reason).toContain("`ready`");
     expect(reason).toMatch(/not a broken or out-of-date one/);
@@ -87,7 +86,6 @@ describe("a Core that does not announce `files`", () => {
     });
 
     const error = (await client
-      .project(rig.projectId)
       .files.download({ path: "a.txt" })
       .catch((err: unknown) => err)) as CoreFilesUnavailableError;
 
@@ -111,8 +109,8 @@ describe("a Core that does not announce `files`", () => {
   });
 });
 
-function project(core: CoreClient): Promise<unknown> {
-  return core.project(rig!.projectId).files.download({ path: "a.txt" });
+function download(core: CoreClient): Promise<unknown> {
+  return core.files.download({ path: "a.txt" });
 }
 
 function chunk(content: string): AsyncIterable<Uint8Array> {
