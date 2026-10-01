@@ -183,6 +183,14 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
     return false;
   }
 
+  /** A file and a folder of the same name are one name on a Core's disk, so S3 may not hold both. */
+  async function assertNoFolderAt(relative: string): Promise<void> {
+    if (await anyUnder(`${fileKey(relative)}/`)) throw new CoreSharedError("is-folder", "a folder is already at that path");
+  }
+  async function assertNoFileAt(relative: string): Promise<void> {
+    if (await exists(fileKey(relative))) throw new CoreSharedError("not-folder", "a file is already at that path");
+  }
+
   /** Server-side copy; S3 can answer 200 and still carry an error in the body. */
   async function copyKey(from: string, to: string): Promise<void> {
     const reply = await send("PUT", to, { headers: { "x-amz-copy-source": keyPath(from) } });
@@ -217,6 +225,7 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
 
     async put(path, body): Promise<void> {
       const parsed = parseFilePath(path);
+      await assertNoFolderAt(parsed.relative);
       await send("PUT", fileKey(parsed.relative), { body });
     },
 
@@ -241,6 +250,7 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
     async mkdir(path): Promise<void> {
       const parsed = parseSharedPath(path);
       if (parsed.segments.length === 0) return; // the root always exists
+      await assertNoFileAt(parsed.relative);
       await send("PUT", folderPrefix(parsed.relative), { body: "", unsigned: { "content-type": MARKER_TYPE } });
     },
 
@@ -333,8 +343,13 @@ export function createS3CoreShared(options: S3CoreSharedOptions): CoreShared {
       const written: string[] = [];
       for (const { relative, entry } of plan) {
         try {
-          if ("body" in entry) await send("PUT", fileKey(relative), { body: entry.body });
-          else await send("PUT", folderPrefix(relative), { body: "", unsigned: { "content-type": MARKER_TYPE } });
+          if ("body" in entry) {
+            await assertNoFolderAt(relative);
+            await send("PUT", fileKey(relative), { body: entry.body });
+          } else {
+            await assertNoFileAt(relative);
+            await send("PUT", folderPrefix(relative), { body: "", unsigned: { "content-type": MARKER_TYPE } });
+          }
           written.push(relative);
         } catch (error) {
           if (!(error instanceof CoreSharedError)) throw error;

@@ -14,6 +14,7 @@ type Fault = (call: { method: string; key: string; copySource?: string }) => boo
 
 let s3: FakeS3;
 let faults: Fault[];
+let sent: Record<string, string>[];
 let clock: number;
 let expiresAt: Date;
 
@@ -22,6 +23,7 @@ const faultyFetch: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   const key = decodeURIComponent(url.pathname.split("/").slice(2).join("/"));
   const headers = (init?.headers ?? {}) as Record<string, string>;
+  sent.push(headers);
   const call = { method: String(init?.method), key, copySource: headers["x-amz-copy-source"] };
   if (faults.some((fault) => fault(call))) {
     return new Response('<Error><Code>InternalError</Code><Message>boom</Message></Error>', { status: 500 });
@@ -47,6 +49,7 @@ const keys = (): string[] => [...s3.objects.keys()].sort();
 beforeEach(async () => {
   s3 = await startFakeS3();
   faults = [];
+  sent = [];
   clock = Date.UTC(2026, 9, 1, 12, 0, 0);
   expiresAt = new Date(clock + 3600_000);
 });
@@ -69,9 +72,14 @@ describe("S3 wire layout", () => {
     expect(s3.objects.get(`${PREFIX}docs/empty/`)?.body.length).toBe(0);
   });
 
-  it("sends every request signed, with the session token", async () => {
+  it("signs every request and sends the session token", async () => {
     await shared().put("a.txt", "a");
-    expect(s3.requests).toEqual(["PUT cores/core-a/a.txt"]);
+    expect(sent.length).toBeGreaterThan(0);
+    for (const headers of sent) {
+      expect(headers.authorization).toMatch(/^AWS4-HMAC-SHA256 Credential=AKIA\//);
+      expect(headers["x-amz-security-token"]).toBe(TOKEN);
+    }
+    expect(s3.requests.at(-1)).toBe("PUT cores/core-a/a.txt");
   });
 });
 

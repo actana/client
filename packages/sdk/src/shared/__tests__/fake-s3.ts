@@ -96,7 +96,7 @@ export async function startFakeS3(options: { bucket?: string; pageSize?: number 
 
     if (req.method === "PUT") {
       const source = req.headers["x-amz-copy-source"];
-      let data = body;
+      let data: Buffer = body;
       if (typeof source === "string") {
         const from = decodeURIComponent(source).replace(/^\//, "").split("/").slice(1).join("/");
         const found = objects.get(from);

@@ -84,6 +84,19 @@ export function runCoreSharedContract(mode: string, factory: ContractFactory): v
       });
     });
 
+    describe("a file and a folder never share a name", () => {
+      it("refuses a file where a folder is, and a folder where a file is", async () => {
+        await shared.put("dir/f.txt", "f");
+        await shared.put("file", "x");
+        await expectCode(shared.put("dir", "x"), "is-folder");
+        await expectCode(shared.mkdir("file"), "not-folder");
+        await expectCode(shared.upload("", [{ path: "dir", body: "x" }]), "is-folder");
+        await expectCode(shared.upload("", [{ path: "file", folder: true }]), "not-folder");
+        expect((await shared.list("")).map((e) => `${e.kind}:${e.path}`)).toEqual(["folder:dir", "file:file"]);
+        expect(text((await shared.get("file")).body)).toBe("x");
+      });
+    });
+
     describe("list", () => {
       it("is empty on an empty Shared folder, and for a folder that is not there", async () => {
         expect(await shared.list("")).toEqual([]);
