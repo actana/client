@@ -8,13 +8,18 @@
   "changesets": [
     "browser-safe-link-frames",
     "cli-session-id",
+    "cli-shared-command",
     "core-link-shared-frames",
+    "core-shared-s3-mode",
+    "core-shared-through-core",
     "no-projects-sdk-cli",
     "pairing-audit-logger-bearer-days",
     "pairing-charge-on-mismatch",
+    "report-contract-shared-folder",
     "sdk-session-id",
     "shared-key-issuer-seaweedfs",
     "smoke-pack-no-collision",
-    "smoke-pack-no-silent-skip"
+    "smoke-pack-no-silent-skip",
+    "sync-version-state-empty"
   ]
 }
