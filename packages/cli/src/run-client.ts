@@ -6,6 +6,7 @@ import { runCoreCommand } from "./core/core-command.ts";
 import { runHarnessCommand } from "./core/harness-command.ts";
 import { runEventsCommand } from "./core/events-command.ts";
 import { runSessionCommand } from "./core/session-command.ts";
+import { runSharedCommand } from "./core/shared-command.ts";
 import { ensureOrchestrationSkillQuietly } from "./core/orchestration-skill.ts";
 import { runSearchCommand } from "./search/search-command.ts";
 import { searchDepsFrom } from "./search/search-wiring.ts";
@@ -39,6 +40,7 @@ Cores
   harness    ls, install, skills
   events     tail
   session    start, ls, logs, resume, attach, kill, send
+  shared     ls, get, put, rm, mkdir, watch
 
 Search
   search     pair, ls, use, rm, status, kb, ingest, query, endpoint
@@ -103,7 +105,7 @@ export async function runClient(
   }
 
   const knownNoun =
-    head === "search" || (CLIENT_NOUNS as readonly string[]).includes(head);
+    head === "search" || head === "shared" || (CLIENT_NOUNS as readonly string[]).includes(head);
 
   if (!knownNoun) {
     clientDeps.err(`actana: unknown command "${head}".`);
@@ -125,6 +127,8 @@ export async function runClient(
   }
 
   switch (head) {
+    case "shared":
+      return runSharedCommand(clientDeps, args, paths);
     case "core":
       return runCoreCommand(clientDeps, args, paths);
     case "harness":

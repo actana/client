@@ -29,6 +29,7 @@ import type {
   SessionAttachment,
 } from "../core/session-attach-channel.ts";
 import type { CoreConnectFn, CoreConnectOptions, CoreLinkClient } from "../core/core-connection.ts";
+import type { OpenSharedFn } from "../core/shared-gateway.ts";
 import type { ClientDeps } from "../kit/cli-deps.ts";
 import type { CorePairingPort } from "../kit/client-ports.ts";
 import { CorePairingError, type CorePairingFailure, type CoreRegistrationBlob } from "@actana/sdk/pairing";
@@ -122,6 +123,8 @@ export type RunOptions = {
   openShell?: OpenCoreShellFn;
   /** What `session attach` gets back, or a throw. */
   openAttach?: OpenSessionAttachFn;
+  /** What the `shared` noun gets when it opens a Shared folder, or a throw. */
+  shared?: OpenSharedFn;
 };
 
 /**
@@ -353,6 +356,11 @@ export function makeCliFixture(): CliFixture {
           opts.openAttach ??
           (async () => {
             throw new Error("this test did not expect to attach to a session");
+          }),
+        openShared:
+          opts.shared ??
+          (async () => {
+            throw new Error("this test did not expect to open a Shared folder");
           }),
         // `actana` is one program, so its deps bag has one shape (#288). A
         // suite about the client nouns still has to fill the machine half; it

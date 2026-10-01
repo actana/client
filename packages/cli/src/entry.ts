@@ -12,6 +12,7 @@ import { connectCore } from "./core/core-connection.ts";
 import { sdkCorePairing } from "./core/core-pair.ts";
 import { openSessionGateway } from "./core/session-gateway.ts";
 import { openSessionAttach } from "./core/session-attach-channel.ts";
+import { openSharedThroughCore } from "./core/shared-gateway.ts";
 import { nodeClientPrompts } from "./kit/node-system.ts";
 import { EXIT_FAILURE } from "./kit/exit-codes.ts";
 
@@ -58,6 +59,7 @@ async function main(argv: string[]): Promise<number> {
     terminal: terminalFromProcess(process),
     openShell: openCoreShell,
     openAttach: openSessionAttach,
+    openShared: openSharedThroughCore,
     hostname: os.hostname(),
     platform: process.platform,
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
