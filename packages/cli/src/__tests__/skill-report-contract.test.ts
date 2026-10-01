@@ -65,6 +65,11 @@ describe("the orchestrator skill teaches the Shared-folder contract", () => {
     expect(SESSIONS).toContain("watcher");
   });
 
+  it("says when to send without the block", () => {
+    expect(SESSIONS).toContain("--no-block");
+    expect(SESSIONS).toContain("stopped to ask");
+  });
+
   it("says the Core appends the block, and does not ask for a path in the prompt", () => {
     expect(SESSIONS).toContain("The Core appends a standard block");
     expect(SESSIONS).toContain("Do not name a path of your own");

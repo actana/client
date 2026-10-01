@@ -842,6 +842,45 @@ describe("actana session send", () => {
     expect(run.err.join("\n")).toContain("session wait session_1 --turn 2");
   });
 
+  it("types the text exactly as given with --no-block: no block, no turn, no Shared folder", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const shared = fakeShared();
+    const run = await cli().run(["session", "send", "session_1", "1", "--enter", "--no-block", "--json"], {
+      sessions: sendInto(writes),
+      shared: shared.open,
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(writes).toEqual([{ text: "1", enter: true }]);
+    expect(shared.opened).toEqual([]);
+    expect(JSON.parse(run.out.join("\n"))).toEqual({ sessionId: "session_1", characters: 1, enter: true, delivered: true });
+  });
+
+  it("sends with --no-block even when the Shared folder cannot be reached", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const run = await cli().run(["session", "send", "session_1", "y", "--no-block"], {
+      sessions: sendInto(writes),
+      shared: async () => {
+        throw new Error("no Shared folder");
+      },
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(writes).toEqual([{ text: "y", enter: undefined }].map((w) => ({ ...w, enter: false })));
+  });
+
+  it("refuses --no-block with --wait or --turn, and --no-block on other verbs", async () => {
+    await withRegisteredCore();
+    for (const extra of [["--wait"], ["--turn", "2"]]) {
+      const run = await cli().run(["session", "send", "session_1", "y", "--no-block", ...extra], { sessions: fakeSessionGateway() });
+      expect(run.code, extra.join(" ")).toBe(EXIT_USAGE);
+      expect(run.err.join("\n")).toContain("--no-block asks for no report");
+    }
+    const kill = await cli().run(["session", "kill", "session_1", "--no-block"], { sessions: fakeSessionGateway() });
+    expect(kill.code).toBe(EXIT_USAGE);
+    expect(kill.err.join("\n")).toContain("--no-block does not apply here");
+  });
+
   it("numbers the turn after the reports already there", async () => {
     await withRegisteredCore();
     const writes: Array<{ text: string; enter: boolean | undefined }> = [];

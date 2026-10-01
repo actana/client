@@ -116,6 +116,7 @@ Flags
   --title <text>      start: what the Session is called in \`ls\`
   --raw               logs: the bytes, escape codes and all, unrendered
   --enter             send: follow the text with a carriage return
+  --no-block          send: type the text as given, with no report block (to answer a dialog)
   --read-only         attach: watch without claiming the Session's write lock
   --dangerously-skip-permissions
                       start/resume: run the harness without permission prompts
@@ -156,6 +157,10 @@ Awaiting a turn
   the first), the same block the Core appends to a starting prompt. With
   \`--wait\` it then waits for that report. Without it, it prints the turn, and
   \`wait <session> --turn <n>\` waits for it later.
+
+  \`send --no-block\` types the text exactly as given: no block, no turn, no Shared
+  folder. Use it to answer a Harness that stopped to ask (a permission or trust
+  dialog), which is not a turn and has no report.
 
   \`wait <session>\` with no \`--turn\` waits for the latest report there is: a
   turn still being written, or the last one if it is complete. After a \`send\`
@@ -667,7 +672,7 @@ async function sessionSend(
   paths: RegistryPaths,
   rest: string[],
 ): Promise<number> {
-  const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout", "--turn"]);
+  const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout", "--turn", "--no-block"]);
   if (misused) return usage(deps, "send", misused);
 
   const [sessionId, ...words] = rest;
@@ -698,14 +703,19 @@ async function sessionSend(
     );
   }
   const text = read.text ?? "";
+  if (args.noBlock && (args.wait || args.turn !== null)) {
+    // No block means no report was asked for, so there is no turn to number or to wait on.
+    return usage(deps, "send", "--no-block asks for no report, so it does not combine with --wait or --turn");
+  }
   if (text.length === 0 && args.wait && asked.turn === null) {
     // A bare carriage return carries no block, so it names no report to wait for.
     return usage(deps, "send", "a bare carriage return starts no report — name the turn to wait for with --turn");
   }
 
   return withGateway(deps, args, paths, "send", async (gateway, core) => {
-    // A bare carriage return is not a turn: no block, no report to number.
-    if (text.length === 0 && !args.wait) {
+    // A bare carriage return, or text sent with --no-block (an answer to a dialog), is not a
+    // turn: no block, no report to number, and no Shared folder needed.
+    if ((text.length === 0 || args.noBlock) && !args.wait) {
       return deliverAndReport(deps, args, gateway, sessionId, text, null);
     }
 
@@ -871,6 +881,7 @@ const SESSION_FLAGS: ReadonlyArray<{ name: string; used: (args: ParsedArgs) => b
   { name: "--cwd", used: (args) => args.cwd !== null },
   { name: "--title", used: (args) => args.title !== null },
   { name: "--raw", used: (args) => args.raw },
+  { name: "--no-block", used: (args) => args.noBlock },
   { name: "--enter", used: (args) => args.enter },
   { name: "--dangerously-skip-permissions", used: (args) => args.skipPermissions },
   { name: "--read-only", used: (args) => args.readOnly },

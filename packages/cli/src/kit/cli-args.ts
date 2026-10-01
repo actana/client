@@ -85,6 +85,8 @@ export type ParsedArgs = {
   title: string | null;
   /** `--raw`: hand over bytes rather than a rendered screen. */
   raw: boolean;
+  /** `--no-block`: `session send` types the text as given: no report block, no turn. */
+  noBlock: boolean;
   /** `--enter`: follow sent text with a carriage return, because the operator asked. */
   enter: boolean;
   /** `--dangerously-skip-permissions`: start the harness without permission prompts. */
@@ -185,6 +187,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     session: null,
     label: null,
     raw: false,
+    noBlock: false,
     enter: false,
     skipPermissions: false,
     readOnly: false,
@@ -258,6 +261,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--wait":
         parsed.wait = true;
+        break;
+      case "--no-block":
+        parsed.noBlock = true;
         break;
       case "--raw":
         parsed.raw = true;
