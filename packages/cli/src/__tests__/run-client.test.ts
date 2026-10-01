@@ -61,6 +61,9 @@ function baseDeps(f: CliFixture, argv: string[], out: string[], err: string[]): 
     openAttach: async () => {
       throw new Error("unexpected attach");
     },
+    openShared: async () => {
+      throw new Error("unexpected shared");
+    },
     hostname: "vm-1",
     platform: "linux",
     interactive: false,

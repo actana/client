@@ -174,7 +174,8 @@ export class CoreFilesStreamError extends CoreFilesError {
 
 /** One request, in the terms this surface actually uses. */
 export type CoreFilesRequest = {
-  method: "GET" | "HEAD" | "PUT";
+  /** DELETE and POST are for `/v1/files` delete, folder and move (control #557); the Project client still only sends GET/HEAD/PUT. */
+  method: "GET" | "HEAD" | "PUT" | "DELETE" | "POST";
   url: string;
   headers: Record<string, string>;
   /** A stream, never a buffer — see {@link CoreFiles.upload}. */

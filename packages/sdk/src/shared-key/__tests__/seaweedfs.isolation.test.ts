@@ -1,11 +1,11 @@
 // Isolation proof against a REAL SeaweedFS (CI job `shared-key-seaweedfs`, see .github/workflows/ci.yml).
 // It needs a running SeaweedFS configured from seaweedfs/iam.json.tmpl; without SEAWEEDFS_ENDPOINT it
 // is skipped locally and fails in the CI job that sets SEAWEEDFS_REQUIRED=1 (a skipped proof is not a pass).
-import { generateKeyPairSync } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createSeaweedfsKeyIssuer, publicJwks, SHARED_KEY_LIFETIME_SECONDS, type SharedKey } from "../index.ts";
+import { loadSigningKey, SEAWEEDFS_KEY_ID } from "../../shared/__tests__/seaweedfs-harness.ts";
 import { s3Request, type S3Credentials } from "./sigv4.ts";
 
 const env = {
@@ -44,8 +44,8 @@ describe.skipIf(!configured)("SeaweedFS issuer: a Core's key is limited to its o
   const objB = `${bucket}/${env.prefix}/${B}/notes/todo.md`;
 
   beforeAll(async () => {
-    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-    const jwks = JSON.stringify(publicJwks(privateKey, "ci-key"));
+    const privateKey = loadSigningKey();
+    const jwks = JSON.stringify(publicJwks(privateKey, SEAWEEDFS_KEY_ID));
     jwksServer = createServer((req, res) => {
       res.writeHead(req.url === "/jwks.json" ? 200 : 404, { "content-type": "application/json" });
       res.end(req.url === "/jwks.json" ? jwks : "{}");
@@ -63,7 +63,7 @@ describe.skipIf(!configured)("SeaweedFS issuer: a Core's key is limited to its o
       issuer: env.issuer!,
       audience: env.audience,
       signingKey: privateKey,
-      keyId: "ci-key",
+      keyId: SEAWEEDFS_KEY_ID,
     });
     const before = Date.now();
     [keyA, keyB] = await Promise.all([issuer.issue(A), issuer.issue(B)]);
