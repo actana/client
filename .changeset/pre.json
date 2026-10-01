@@ -8,9 +8,12 @@
   "changesets": [
     "browser-safe-link-frames",
     "cli-session-id",
+    "core-link-shared-frames",
+    "no-projects-sdk-cli",
     "pairing-audit-logger-bearer-days",
     "pairing-charge-on-mismatch",
     "sdk-session-id",
+    "shared-key-issuer-seaweedfs",
     "smoke-pack-no-collision",
     "smoke-pack-no-silent-skip"
   ]
