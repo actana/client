@@ -18,8 +18,10 @@
     "report-contract-shared-folder",
     "sdk-session-id",
     "shared-key-issuer-seaweedfs",
+    "shared-key-issuers-sts-supabase-r2",
     "smoke-pack-no-collision",
     "smoke-pack-no-silent-skip",
-    "sync-version-state-empty"
+    "sync-version-state-empty",
+    "sync-version-state-next-2"
   ]
 }
