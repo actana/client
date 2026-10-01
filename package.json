@@ -16,7 +16,7 @@
     "prelint": "node scripts/require-node-24.mjs",
     "pretest": "node scripts/require-node-24.mjs",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint packages scripts eslint.config.mjs",
+    "lint": "eslint packages scripts examples eslint.config.mjs",
     "test": "node scripts/run-unit-tests.mjs",
     "changeset": "changeset",
     "version-packages": "changeset version",
