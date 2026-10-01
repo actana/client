@@ -2,7 +2,7 @@
 // capability, the protocol bump, and — the part that matters most — that no key
 // ever comes back out of an error or a formatter.
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   CORE_LINK_PROTOCOL_VERSION,
   CORE_LINK_REDACTED,
@@ -18,6 +18,8 @@ import {
   type CoreLinkRequestFrame,
   type CoreLinkServerFrame,
 } from "../link-frames";
+import { CoreClient } from "../client";
+import type { CoreLinkSocket } from "../link-socket";
 
 const SECRETS = {
   accessKeyId: "AKIA-SECRET-ID-7f3a",
@@ -193,5 +195,55 @@ describe("the protocol version moved for the Shared-folder frames", () => {
     expect(CORE_LINK_PROTOCOL_VERSION).toBe("0.19.0");
     expect(coreLinkProtocolCompatible("0.18.0")).toBe(false);
     expect(coreLinkProtocolCompatible("0.19.2")).toBe(true);
+  });
+});
+
+describe("the `shared` capability through the SDK client", () => {
+  let client: CoreClient | null = null;
+  afterEach(() => {
+    client?.close();
+    client = null;
+  });
+
+  // The real transport and client over a hand-driven socket: the Core's side is
+  // one `ready` frame, delivered once the client has opened the link.
+  async function connectTo(ready: Record<string, unknown>): Promise<CoreClient> {
+    const listeners: Record<string, Array<(...args: unknown[]) => void>> = {};
+    const socket = {
+      readyState: 0,
+      send: () => {},
+      close: () => {
+        socket.readyState = 3;
+      },
+      on: (event: string, cb: (...args: unknown[]) => void) => {
+        (listeners[event] ??= []).push(cb);
+      },
+    };
+    const createSocket = () => {
+      queueMicrotask(() => {
+        socket.readyState = 1;
+        for (const cb of listeners.open ?? []) cb();
+        for (const cb of listeners.message ?? []) cb(JSON.stringify({ type: "ready", ...ready }));
+      });
+      return socket as unknown as CoreLinkSocket;
+    };
+    client = new CoreClient({ url: "wss://core.test:9444", bearer: null, createSocket });
+    await client.connect();
+    return client;
+  }
+
+  it("reads `ready.shared` off the transport into connectionInfo and sharedCapability", async () => {
+    const c = await connectTo({ version: CORE_LINK_PROTOCOL_VERSION, shared: { version: 1 } });
+    expect(c.connectionInfo().shared).toEqual({ version: 1 });
+    expect(c.sharedCapability()).toEqual({ version: 1 });
+  });
+
+  it("reads an absent or unrecognised `shared` as null", async () => {
+    const absent = await connectTo({ version: CORE_LINK_PROTOCOL_VERSION });
+    expect(absent.connectionInfo().shared).toBeNull();
+    expect(absent.sharedCapability()).toBeNull();
+    absent.close();
+    const junk = await connectTo({ version: CORE_LINK_PROTOCOL_VERSION, shared: { version: 2 } });
+    expect(junk.sharedCapability()).toBeNull();
   });
 });

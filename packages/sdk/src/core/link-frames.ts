@@ -1100,10 +1100,9 @@ export type CoreLinkSharedCapability = { version: 1 };
  * message: use {@link redactCoreLinkSharedFrame} or {@link describeCoreLinkSharedFrame}
  * wherever a frame that carries one could be printed.
  *
- * TODO(actana/client#32): this is declared here because the Shared-folder key
- * issuer (client#5, PR 32) is not merged yet and this module imports nothing.
- * PR 32's `SharedKey` is these three fields plus `expiresAt: Date`, and that PR
- * must reuse this type (`Omit<SharedKey, "expiresAt">`) rather than keep a second one.
+ * This is the one definition of the three key fields: the Shared-folder key issuer
+ * (`shared-key/types.ts`) type-imports it for `SharedKey`, which adds `expiresAt: Date`.
+ * The import runs that way because this module imports nothing (ADR 0025 D2).
  */
 export type CoreLinkSharedCredentials = {
   accessKeyId: string;
