@@ -12,6 +12,7 @@
     "core-link-shared-frames",
     "core-shared-s3-mode",
     "core-shared-through-core",
+    "files-command-at-home",
     "no-projects-sdk-cli",
     "pairing-audit-logger-bearer-days",
     "pairing-charge-on-mismatch",
@@ -22,6 +23,7 @@
     "smoke-pack-no-collision",
     "smoke-pack-no-silent-skip",
     "sync-version-state-empty",
-    "sync-version-state-next-2"
+    "sync-version-state-next-2",
+    "sync-version-state-next-3"
   ]
 }
