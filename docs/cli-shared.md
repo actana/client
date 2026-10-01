@@ -1,6 +1,6 @@
 # `actana shared`
 
-The Shared folder of a Core, from the command line (client issue 7). It lets an orchestrator send work, watch, and read reports with no `core exec`: files go in and out of the folder, and `watch` says when something changed. `actana shared --help` is the reference; this page says what the help does not.
+The Shared folder of a Core, from the command line (client issue 7; the report contract on top of it is in [report-contract.md](report-contract.md)). It lets an orchestrator send work, watch, and read reports with no `core exec`: files go in and out of the folder, and `watch` says when something changed. `actana shared --help` is the reference; this page says what the help does not.
 
 ```
 actana shared ls [<core>:][<path>]
