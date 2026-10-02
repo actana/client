@@ -7,6 +7,7 @@
   },
   "changesets": [
     "browser-safe-link-frames",
+    "cli-parity-await-prompt",
     "cli-session-id",
     "cli-shared-command",
     "core-link-shared-frames",
@@ -24,6 +25,7 @@
     "smoke-pack-no-silent-skip",
     "sync-version-state-empty",
     "sync-version-state-next-2",
-    "sync-version-state-next-3"
+    "sync-version-state-next-3",
+    "sync-version-state-next-4"
   ]
 }
