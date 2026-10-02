@@ -75,6 +75,15 @@ export type ParsedArgs = {
   wait: boolean;
   /** `--wait-timeout <seconds>`, unparsed — the verb decides what a bad value means. */
   waitTimeout: string | null;
+  /**
+   * `--await-prompt`: block until the Core says whether the starting prompt reached the harness
+   * (#395 on Control).
+   *
+   * Shorter than `--wait`, and a different question: `--wait` waits for the turn to end, this waits
+   * only for the Session to become able to take a `send`. Nothing in this package times it — the wait
+   * ends on the Core's own report.
+   */
+  awaitPrompt: boolean;
   /** `--turn <n>`, unparsed: which turn's report `session send` / `session wait` means. */
   turn: string | null;
   /** `--harness <name>`, or null to take the default harness. */
@@ -178,6 +187,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     depth: null,
     sha256: false,
     wait: false,
+    awaitPrompt: false,
     waitTimeout: null,
     turn: null,
     harness: null,
@@ -261,6 +271,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--wait":
         parsed.wait = true;
+        break;
+      case "--await-prompt":
+        parsed.awaitPrompt = true;
         break;
       case "--no-block":
         parsed.noBlock = true;
