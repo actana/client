@@ -63,7 +63,9 @@ describe("the skill only teaches verbs this binary has (#288)", () => {
 
   it("teaches the client nouns, which is the point of it on a Core", () => {
     const taught = new Set(namesTaughtBySkill());
-    for (const noun of CLIENT_NOUNS) {
+    // `files` and `shared` are client nouns too: `runClient` dispatches both, and a skill that never
+    // shows `actana files` leaves an agent unaware it can read or write the Core's home folder.
+    for (const noun of [...CLIENT_NOUNS, "files", "shared"]) {
       expect(taught.has(noun), `the skill never shows \`actana ${noun}\``).toBe(true);
     }
   });
