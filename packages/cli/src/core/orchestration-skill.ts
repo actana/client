@@ -23,6 +23,7 @@ import {
   ORCHESTRATION_SKILL_NAMES,
 } from "./orchestration-skill-payload.ts";
 import { HARNESS_SKILL_TARGETS } from "./harness-skill-targets.ts";
+import { withPiHomeMarkersResolved } from "./pi-agent-dir.ts";
 
 /**
  * Write or repair every copy, and report one row per Harness per skill.
@@ -36,11 +37,15 @@ import { HARNESS_SKILL_TARGETS } from "./harness-skill-targets.ts";
  *
  * Never throws.
  */
-export function ensureOrchestrationSkill(home: string): SkillInstallEntry[] {
+export function ensureOrchestrationSkill(home: string, env: NodeJS.ProcessEnv = process.env): SkillInstallEntry[] {
+  // Pi's marker follows `$PI_CODING_AGENT_DIR` at call time, as in Control's CLI (Control #518 part 3). Control
+  // read the environment through its shell-env helper, which also folds in variables exported by the user's login
+  // shell; this package has no such helper, so it reads the process environment it is given.
+  const targets = withPiHomeMarkersResolved(HARNESS_SKILL_TARGETS, env, home);
   return ORCHESTRATION_SKILL_NAMES.flatMap((skillName) =>
     installOrchestrationSkill({
       home,
-      targets: HARNESS_SKILL_TARGETS,
+      targets,
       skillName,
       marker: ORCHESTRATION_SKILL_MARKER,
       files: ORCHESTRATION_SKILL_FILES[skillName] ?? {},
@@ -57,9 +62,9 @@ export function ensureOrchestrationSkill(home: string): SkillInstallEntry[] {
  * and a warning on stderr for a thing the operator did not ask about is noise
  * on every single invocation. `actana harness skills` is where the report is.
  */
-export function ensureOrchestrationSkillQuietly(home: string): void {
+export function ensureOrchestrationSkillQuietly(home: string, env: NodeJS.ProcessEnv = process.env): void {
   try {
-    ensureOrchestrationSkill(home);
+    ensureOrchestrationSkill(home, env);
   } catch {
     // Deliberately empty. The installer already reports its own failures as
     // entries rather than throwing; this catches the case it cannot — a home

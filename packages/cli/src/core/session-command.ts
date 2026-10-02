@@ -218,8 +218,11 @@ Awaiting a turn
   \`actana shared get <reportPath>\`.
 
   A harness that writes no report runs out the \`--wait-timeout\` and the message
-  says this side gave up. Without \`--wait-timeout\` there is no deadline: a turn
-  takes as long as the work takes.
+  says this side gave up. \`wait\` has no deadline unless you set one: a turn takes
+  as long as the work takes. **\`send --wait\` is the exception, and it defaults to
+  ${SEND_WAIT_DEFAULT_TIMEOUT_S} seconds** whether it settles on the report or on the status, because a
+  return that lands on a dialog starts no turn and no report ever lands (#405).
+  \`--wait-timeout 0\` removes the deadline.
 
 Awaiting a turn when the Core has no Shared folder (the status-based wait)
   Without a Shared folder there is no report file to settle on. \`wait\` and
@@ -1348,6 +1351,13 @@ async function sessionSend(
   // with no text got past the checks above only because `--enter` asked for the bare return.
   const submit = !args.noEnter;
 
+  // **`send --wait` carries a default deadline on both waits** (Control #405): it is the one wait for a turn that
+  // has not started yet, and a carriage return that lands on a dialog rather than a composer starts none — so no
+  // report ever lands and no status is ever reported, and an unbounded wait would never end. `--wait-timeout <s>`
+  // replaces it and `--wait-timeout 0` removes it. `wait` on its own keeps no default: it waits for a turn that is
+  // already under way.
+  const deadlineMs = args.waitTimeout === null ? SEND_WAIT_DEFAULT_TIMEOUT_S * 1000 : timeout.ms;
+
   return withGateway(deps, args, paths, "send", async (gateway, core) => {
     // A bare carriage return, or text sent with --no-block (an answer to a dialog), is not a
     // turn: no block, no report to number, and no Shared folder needed.
@@ -1396,7 +1406,6 @@ async function sessionSend(
         );
       }
       const andReturn = submit ? " and a carriage return" : "";
-      const deadlineMs = args.waitTimeout === null ? SEND_WAIT_DEFAULT_TIMEOUT_S * 1000 : timeout.ms;
       deps.err(`actana session send: no Shared folder (${folder.why}), so the status-based wait was used.`);
       deps.verbose(
         `sending ${text.length} characters to session ${sessionId}${andReturn}, then waiting` +
@@ -1415,7 +1424,7 @@ async function sessionSend(
       deps.verbose(`sending ${text.length} characters and the report block (turn ${turn}) to session ${sessionId}`);
       const code = await deliverAndReport(deps, args, gateway, sessionId, body, { turn, characters: text.length }, submit);
       if (code !== EXIT_OK) return code;
-      return await awaitReportAndPrint(deps, args, handle, sessionId, turn, cursor, timeout.ms);
+      return await awaitReportAndPrint(deps, args, handle, sessionId, turn, cursor, deadlineMs);
     } finally {
       folder.handle.close();
     }
