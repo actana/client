@@ -25,7 +25,8 @@
     "data"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./skill-payload": "./src/skill-payload.ts"
   },
   "publishConfig": {
     "access": "public",
@@ -34,6 +35,10 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
+      },
+      "./skill-payload": {
+        "types": "./dist/skill-payload.d.ts",
+        "default": "./dist/skill-payload.js"
       }
     }
   },
