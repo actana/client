@@ -100,6 +100,25 @@ if (typeof core.CoreClient !== "function") throw new Error("core export missing"
 if (typeof cli.runClient !== "function") throw new Error("cli.runClient missing");
 if (cli.NOT_HANDLED !== Symbol.for("actana.cli.NOT_HANDLED")) throw new Error("cli.NOT_HANDLED missing");
 if (typeof cli.clientHelp !== "function") throw new Error("cli.clientHelp missing");
+// A host (Control's built-in CLI) binds every port from the package root, so the built root has to
+// export the runtime implementations entry.ts binds, not only their types.
+for (const name of [
+  "probeCore",
+  "connectCore",
+  "sdkCorePairing",
+  "openSessionGateway",
+  "openCoreShell",
+  "openSessionAttach",
+  "openSharedThroughCore",
+  "openFilesAtHome",
+  "terminalFromProcess",
+  "nodeClientPrompts",
+]) {
+  if (cli[name] === undefined || cli[name] === null) throw new Error("cli." + name + " is not exported from the root");
+}
+for (const name of ["identify", "pair"]) {
+  if (typeof cli.sdkCorePairing[name] !== "function") throw new Error("cli.sdkCorePairing." + name + " missing");
+}
 console.log("imports-ok");
 `;
 run(smokeRoot, process.execPath, ["--input-type=module", "-e", importProbe]);
