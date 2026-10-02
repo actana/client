@@ -10,6 +10,7 @@
     "cli-export-host-test-surface",
     "cli-export-port-implementations",
     "cli-parity-await-prompt",
+    "cli-pi-skill-target-and-send-deadline",
     "cli-restore-control-parity",
     "cli-session-id",
     "cli-shared-command",
@@ -32,6 +33,7 @@
     "sync-version-state-next-4",
     "sync-version-state-next-5",
     "sync-version-state-next-6",
-    "sync-version-state-next-7"
+    "sync-version-state-next-7",
+    "sync-version-state-next-8"
   ]
 }
