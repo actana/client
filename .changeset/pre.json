@@ -9,6 +9,7 @@
     "browser-safe-link-frames",
     "cli-export-port-implementations",
     "cli-parity-await-prompt",
+    "cli-restore-control-parity",
     "cli-session-id",
     "cli-shared-command",
     "core-link-shared-frames",
@@ -28,6 +29,7 @@
     "sync-version-state-next-2",
     "sync-version-state-next-3",
     "sync-version-state-next-4",
-    "sync-version-state-next-5"
+    "sync-version-state-next-5",
+    "sync-version-state-next-6"
   ]
 }
