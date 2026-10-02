@@ -292,7 +292,7 @@ describe("send, wait and read end to end through the Shared folder of a Core", (
         typed.push(text);
         // The harness answers a moment after it was typed to: its report lands in ~/shared on the Core.
         setTimeout(() => c.bump("sessions/s1/report-2.md", "# turn 2\nthe answer\nACT-REPORT-END\n"), 30);
-        return true;
+        return { ok: true };
       },
     });
     // Turn 1 was reported before: send must number this one 2.
