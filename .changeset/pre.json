@@ -7,6 +7,7 @@
   },
   "changesets": [
     "browser-safe-link-frames",
+    "cli-export-port-implementations",
     "cli-parity-await-prompt",
     "cli-session-id",
     "cli-shared-command",
@@ -26,6 +27,7 @@
     "sync-version-state-empty",
     "sync-version-state-next-2",
     "sync-version-state-next-3",
-    "sync-version-state-next-4"
+    "sync-version-state-next-4",
+    "sync-version-state-next-5"
   ]
 }
