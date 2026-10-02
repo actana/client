@@ -69,7 +69,7 @@ export function harnessResumeCommand(
     case "opencode":
       return join(["opencode", "--session", sessionId], autoMode);
     case "pi":
-      return join(["pi", "--resume", sessionId], autoMode);
+      return join(["pi", "--session", sessionId], autoMode);
   }
 }
 
