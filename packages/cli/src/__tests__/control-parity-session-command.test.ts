@@ -1,3 +1,12 @@
+// PARITY WITH CONTROL (actana/client#11). This file is Control's own `session-command.test.ts` at
+// `feat/0.5.0`, carried across whole so the next drift from the CLI Control ships fails here, in the
+// client's CI. Imports are the only edit, plus the notes below.
+//
+// All 73 of Control's tests run here. The ones that pin Control's *status-based* `session wait` and
+// `send --wait` run on the fallback path: the Shared folder is not reachable in them (the fixture's
+// `openShared` refuses), which is exactly when the client falls back to that wait. With a Shared folder
+// the report-file wait of client #8 is the default and is covered in `session-command.test.ts`.
+
 // The `session` noun's surface: flags, output, exit codes (#160).
 //
 // The gateway is injected (`session-gateway.ts` is the only module that dials),
@@ -10,29 +19,6 @@
 // `in-process-core-session.test.ts` is the other half: the same verbs against a
 // real `PtyCoreLinkServer`, proving the frames are the ones a Core answers.
 
-// PARITY WITH CONTROL (actana/client#11). This file is Control's own `session-command.test.ts` at
-// `feat/0.5.0`, carried across so the next drift from the CLI Control ships fails here, in the
-// client's CI. Imports are the only edit, plus the omissions below.
-//
-// Omitted on purpose: the twelve tests that pin Control's *status-based* `session wait` and
-// `send --wait` (a wait on the Core's settling status, through `SessionGateway.wait` and
-// `sendAndWait`). The client settles those on the report file in the Shared folder instead
-// (client #8, `session-report-wait.ts`), which is the report contract and stays. They are:
-//   - is a verb of its own, and takes --wait-timeout without a --wait beside it
-//   - says a Session with no harness running has nothing to wait on
-//   - accepts `send --wait`, which was a usage error
-//   - prints the same object `start --wait --json` prints
-//   - reports a timeout as this side giving up, never as a status
-//   - states the running-turn limit in the help text
-//   - submits a follow-up sent with --wait, and bounds the wait it did not start
-//   - lets --wait-timeout replace the send deadline, and 0 remove it
-//   - reports a send wait that heard nothing as this side giving up
-//   - exits non-zero when the link drops mid-wait, and calls the outcome unknown (#396)
-//   - points an uncursored wait at the Core rather than at a delivery it never made
-//   - keeps the help's next step off `session wait` too
-// Their help-text assertions about the status wait (`send --wait` is the exception, "not on the
-// `--wait` document") are dropped from the two help tests below for the same reason.
-
 import { describe, it, expect, afterEach } from "vitest";
 import {
   fakeSessionGateway,
@@ -44,8 +30,12 @@ import {
 import {
   SessionGatewayError,
   type SessionRow,
+  type StartedSession,
 } from "../core/session-gateway.ts";
-import { CoreSessionTurnTimeoutError } from "@actana/sdk/core";
+import {
+  CoreSessionLinkLostError,
+  CoreSessionTurnTimeoutError,
+} from "@actana/sdk/core";
 import { EXIT_FAILURE, EXIT_OK, EXIT_USAGE } from "../kit/exit-codes.ts";
 
 let fixture: CliFixture | null = null;
@@ -762,6 +752,29 @@ describe("actana session logs", () => {
 });
 
 describe("actana session wait, and send --wait (#289)", () => {
+  /** An attached Session, settling on whatever the test says. */
+  function attached(overrides: Partial<StartedSession> = {}): StartedSession {
+    return fakeStartedSession({
+      // The three answers only a spawn gives. An attach did not spawn.
+      command: null,
+      reportsTurnStart: null,
+      ...overrides,
+    });
+  }
+
+  it("is a verb of its own, and takes --wait-timeout without a --wait beside it", async () => {
+    await withRegisteredCore();
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "90"], {
+      sessions: fakeSessionGateway({
+        wait: async () => attached({ wait: async () => ({ status: "finished", exited: false }) }),
+      }),
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    // The id on stdout, as every other verb leaves it, so `$(…)` still works.
+    expect(run.out).toEqual(["session_1"]);
+    expect(run.err.join("\n")).toContain("finished");
+  });
+
   it("refuses the flags it does not take, `--wait` included", async () => {
     await withRegisteredCore();
     for (const flag of ["--wait", "--enter", "--harness", "--raw"]) {
@@ -790,6 +803,104 @@ describe("actana session wait, and send --wait (#289)", () => {
     expect(extra.err.join("\n")).toContain('unexpected argument "session_2"');
   });
 
+  it("says a Session with no harness running has nothing to wait on", async () => {
+    await withRegisteredCore();
+    const run = await cli().run(["session", "wait", "session_1"], {
+      sessions: fakeSessionGateway({
+        wait: async () => {
+          throw new SessionGatewayError(
+            "not-running",
+            "session session_1 has no harness running — there is nothing to attach a wait to",
+          );
+        },
+      }),
+    });
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(run.err.join("\n")).toContain("no harness running");
+  });
+
+  it("accepts `send --wait`, which was a usage error", async () => {
+    await withRegisteredCore();
+    const sent: Array<{ text: string; enter: boolean | undefined }> = [];
+    const run = await cli().run(["session", "send", "session_1", "carry", "on", "--wait"], {
+      sessions: fakeSessionGateway({
+        sendAndWait: async (_sessionId, text, opts) => {
+          sent.push({ text, enter: opts?.enter });
+          return attached({ wait: async () => ({ status: "needs-input", exited: false }) });
+        },
+      }),
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    // One call for the write and the wait — the gateway resolves the PTY once
+    // and there is no window between the delivery and the start of the wait.
+    // `enter: true` since #404: the write a `--wait` waits for is one that
+    // submits, because a turn nothing started never ends.
+    expect(sent).toEqual([{ text: "carry on", enter: true }]);
+    expect(run.err.join("\n")).toContain("Sent 8 characters");
+    expect(run.err.join("\n")).toContain("needs-input");
+  });
+
+  it("prints the same object `start --wait --json` prints", async () => {
+    await withRegisteredCore();
+    const outcome = { status: "finished", exited: true, exitCode: 0 };
+
+    const started = await cli().run(["session", "start", "go", "--wait", "--json"], {
+      sessions: fakeSessionGateway({
+        start: async () => fakeStartedSession({ wait: async () => outcome }),
+      }),
+    });
+    const sent = await cli().run(["session", "send", "session_1", "go on", "--wait", "--json"], {
+      sessions: fakeSessionGateway({
+        sendAndWait: async () => attached({ wait: async () => outcome }),
+      }),
+    });
+    const waited = await cli().run(["session", "wait", "session_1", "--json"], {
+      sessions: fakeSessionGateway({ wait: async () => attached({ wait: async () => outcome }) }),
+    });
+
+    expect(started.code, started.err.join("\n")).toBe(EXIT_OK);
+    expect(sent.code, sent.err.join("\n")).toBe(EXIT_OK);
+    expect(waited.code, waited.err.join("\n")).toBe(EXIT_OK);
+
+    const keys = (run: { out: string[] }) =>
+      Object.keys(JSON.parse(run.out.join("\n")) as Record<string, unknown>).sort();
+    // One result shape across the three commands, so a caller's parser does not
+    // fork on which verb produced the document.
+    expect(keys(sent)).toEqual(keys(started));
+    expect(keys(waited)).toEqual(keys(started));
+    expect(keys(started)).toContain("screen");
+    expect(keys(started)).toContain("waited");
+
+    // And the fields an attach cannot answer are `null` rather than invented.
+    const attachedDoc = JSON.parse(sent.out.join("\n")) as Record<string, unknown>;
+    expect(attachedDoc.command).toBeNull();
+    expect(attachedDoc.reportsTurnStart).toBeNull();
+  });
+
+  it("reports a timeout as this side giving up, never as a status", async () => {
+    await withRegisteredCore();
+    const run = await cli().run(
+      ["session", "send", "session_1", "go on", "--wait", "--wait-timeout", "1", "--json"],
+      {
+        sessions: fakeSessionGateway({
+          sendAndWait: async () =>
+            attached({
+              wait: async () => {
+                throw new Error("session session_1 was still running after 1000ms");
+              },
+            }),
+        }),
+      },
+    );
+    // The existing failure code, not a new one: `exit-codes.ts` belongs to #285
+    // and a wait timeout has always been `EXIT_FAILURE` for `start --wait`.
+    expect(run.code).toBe(EXIT_FAILURE);
+    const payload = JSON.parse(run.out.join("\n")) as Record<string, unknown>;
+    expect(payload.waited).toBe(true);
+    expect(payload.error).toContain("was still running");
+    expect(payload.status).toBeUndefined();
+  });
+
   it("refuses --wait-timeout on a send that is not waiting", async () => {
     await withRegisteredCore();
     const run = await cli().run(["session", "send", "session_1", "go", "--wait-timeout", "90"], {
@@ -799,6 +910,15 @@ describe("actana session wait, and send --wait (#289)", () => {
     expect(run.err.join("\n")).toContain("only means something with --wait");
   });
 
+  it("states the running-turn limit in the help text", async () => {
+    // #289 C: a keystroke into a busy harness is not a new turn, so a send into
+    // one resolves on *that* turn's end — possibly before the harness has read
+    // the text. It is stated rather than left to be discovered.
+    const help = await cli().run(["session", "--help"]);
+    expect(help.out.join("\n")).toContain("actana session wait <session>");
+    expect(help.out.join("\n")).toContain("resolves on that turn's end");
+    expect(help.out.join("\n")).toContain("this side gave up");
+  });
 });
 
 describe("actana session send", () => {
@@ -892,6 +1012,37 @@ describe("actana session send", () => {
     expect(run.err.join("\n")).toContain("contradict each other");
   });
 
+  it("submits a follow-up sent with --wait, and bounds the wait it did not start", async () => {
+    await withRegisteredCore();
+    const calls: Array<{ text: string; enter: boolean | undefined }> = [];
+    const deadlines: Array<number | undefined> = [];
+    const outcome = { status: "finished", exited: true, exitCode: 0 } as const;
+    const run = await cli().run(["session", "send", "session_1", "carry on", "--wait"], {
+      sessions: fakeSessionGateway({
+        sendAndWait: async (_sessionId, text, opts) => {
+          calls.push({ text, enter: opts?.enter });
+          return fakeStartedSession({
+            wait: async (waitOpts) => {
+              deadlines.push(waitOpts.timeoutMs);
+              return outcome;
+            },
+          });
+        },
+      }),
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    // The wait path takes the same default the plain path does, so the turn it
+    // waits for is one that actually starts.
+    expect(calls).toEqual([{ text: "carry on", enter: true }]);
+    // And it carries a deadline the operator did not have to know to ask for
+    // (#405): the return can land on a dialog rather than a composer, in which
+    // case no turn starts and nothing will ever end this wait. Seventeen
+    // minutes, which is past the Core's own fifteen-minute quiet backstop and
+    // the minute its sweep can add — where the Core has an answer it gets to
+    // give it, and this only fires where it has none.
+    expect(deadlines).toEqual([1_020_000]);
+  });
+
   it("refuses --no-enter with --wait rather than waiting for a turn it did not start", async () => {
     await withRegisteredCore();
     // #405, the first acceptance criterion. Nothing is dialled — the fixture's
@@ -905,6 +1056,37 @@ describe("actana session send", () => {
     // It names both ways out, because an operator who typed this wanted one of
     // them: submit and wait, or type now and wait separately.
     expect(run.err.join("\n")).toContain("actana session wait");
+  });
+
+  it("lets --wait-timeout replace the send deadline, and 0 remove it", async () => {
+    await withRegisteredCore();
+    const deadlines: Array<number | undefined> = [];
+    const gateway = () =>
+      fakeSessionGateway({
+        sendAndWait: async () =>
+          fakeStartedSession({
+            wait: async (waitOpts) => {
+              deadlines.push(waitOpts.timeoutMs);
+              return { status: "finished", exited: false };
+            },
+          }),
+      });
+
+    const bounded = await cli().run(
+      ["session", "send", "session_1", "carry on", "--wait", "--wait-timeout", "30"],
+      { sessions: gateway() },
+    );
+    expect(bounded.code, bounded.err.join("\n")).toBe(EXIT_OK);
+
+    // `0` is the opt-out, spelled out: the old unbounded wait, for a caller that
+    // knows its turn is long and would rather hang than be given up on.
+    const unbounded = await cli().run(
+      ["session", "send", "session_1", "carry on", "--wait", "--wait-timeout", "0"],
+      { sessions: gateway() },
+    );
+    expect(unbounded.code, unbounded.err.join("\n")).toBe(EXIT_OK);
+
+    expect(deadlines).toEqual([30_000, undefined]);
   });
 
   it("takes --wait-timeout 0 as no deadline on the other verbs that accept it", async () => {
@@ -927,9 +1109,12 @@ describe("actana session send", () => {
     });
     expect(started.code, started.err.join("\n")).toBe(EXIT_OK);
 
-    // `session wait --wait-timeout 0` and `send --wait --wait-timeout 0` settle on a report file
-    // here, not on a status: they are covered in `session-command.test.ts`.
-    expect(deadlines).toEqual([undefined]);
+    const waited = await cli().run(["session", "wait", "session_1", "--wait-timeout", "0"], {
+      sessions: fakeSessionGateway({ wait: async () => settle() }),
+    });
+    expect(waited.code, waited.err.join("\n")).toBe(EXIT_OK);
+
+    expect(deadlines).toEqual([undefined, undefined]);
 
     // And the discontinuity stops at zero: a negative is still a refusal, and a
     // positive that rounds below a millisecond is still a deadline rather than
@@ -941,9 +1126,9 @@ describe("actana session send", () => {
     expect(negative.err.join("\n")).toContain("wants a number of seconds");
 
     const tiny: Array<number | undefined> = [];
-    const rounded = await cli().run(["session", "start", "go", "--wait", "--wait-timeout", "0.0001"], {
+    const rounded = await cli().run(["session", "wait", "session_1", "--wait-timeout", "0.0001"], {
       sessions: fakeSessionGateway({
-        start: async () =>
+        wait: async () =>
           fakeStartedSession({
             wait: async (waitOpts) => {
               tiny.push(waitOpts.timeoutMs);
@@ -954,6 +1139,120 @@ describe("actana session send", () => {
     });
     expect(rounded.code, rounded.err.join("\n")).toBe(EXIT_OK);
     expect(tiny).toEqual([1]);
+  });
+
+  it("reports a send wait that heard nothing as this side giving up", async () => {
+    await withRegisteredCore();
+    // The dialog case, end to end: the SDK's deadline expires having heard no
+    // status since the delivery, and what reaches the operator is that message
+    // — with the exit code that says the wait did not succeed, and no status
+    // the Core never sent.
+    const run = await cli().run(["session", "send", "session_1", "carry on", "--wait", "--json"], {
+      sessions: fakeSessionGateway({
+        sendAndWait: async () =>
+          fakeStartedSession({
+            wait: async () => {
+              throw new CoreSessionTurnTimeoutError({
+                sessionId: "session_1",
+                timeoutMs: 900_000,
+                afterEventId: 42,
+                lastStatus: "needs-input",
+                reportedSinceDelivery: false,
+              });
+            },
+          }),
+      }),
+    });
+    expect(run.code).toBe(EXIT_FAILURE);
+    const payload = JSON.parse(run.out.join("\n"));
+    expect(payload.waited).toBe(true);
+    expect(payload.status).toBeUndefined();
+    // The message names both readings rather than diagnosing one: a return that
+    // submitted nothing, or a harness that reports nothing until a turn ends.
+    expect(payload.error).toContain("lands on a dialog rather than a composer");
+    expect(payload.error).toContain("still running on a harness that reports nothing");
+    expect(run.err.join("\n")).toContain("no turn end was reported");
+    // The next step is the CLI's to name, and it is named only on this shape of
+    // timeout: read the screen, or follow the log **from the delivery**.
+    expect(run.err.join("\n")).toContain("`actana session logs session_1` shows what is on screen");
+    expect(run.err.join("\n")).toContain("`actana events tail --since 42`");
+    // **And it warns off `session wait`.** That verb is uncursored: in this
+    // exact state it answers at once with the status from before the send and
+    // exits zero, which reads as a completed turn. Recommending it would put
+    // #405's false completion back one layer up.
+    expect(run.err.join("\n")).toContain("Not `session wait`");
+    expect(run.err.join("\n")).toContain("exits zero");
+  });
+
+  it("exits non-zero when the link drops mid-wait, and calls the outcome unknown (#396)", async () => {
+    // Issue #396's acceptance criterion, at the layer the operator meets it:
+    // `--wait` against a Core that blips used to leave the command pending for
+    // ever. It now ends — non-zero, with the outcome named as unknown, and
+    // **not** as a status the Core never sent.
+    await withRegisteredCore();
+    const run = await cli().run(["session", "send", "session_1", "carry on", "--wait", "--json"], {
+      sessions: fakeSessionGateway({
+        sendAndWait: async () =>
+          fakeStartedSession({
+            wait: async () => {
+              throw new CoreSessionLinkLostError({
+                sessionId: "session_1",
+                afterEventId: 42,
+                lastStatus: "running",
+                reportedSinceDelivery: true,
+                graceMs: 30_000,
+                downMs: 31_200,
+                reason: "socket hang up",
+              });
+            },
+          }),
+      }),
+    });
+
+    expect(run.code).toBe(EXIT_FAILURE);
+    const payload = JSON.parse(run.out.join("\n"));
+    expect(payload.waited).toBe(true);
+    // No status key at all: the Core reported none, so the document carries
+    // none. A `--json` caller branching on `status` must not find `running`
+    // here and read it as the turn.
+    expect(payload.status).toBeUndefined();
+    expect(payload.error).toContain("outcome is unknown");
+    expect(payload.error).toContain("not a report that the turn finished");
+    expect(run.err.join("\n")).toContain("the turn's outcome is unknown");
+    // Cursored, so the next step is the log from the delivery — and, as after
+    // #405's timeout, explicitly not `session wait`, which would answer from the
+    // status this Session was parked at before the drop and exit zero.
+    expect(run.err.join("\n")).toContain("`actana events tail --since 42`");
+    expect(run.err.join("\n")).toContain("Not `session wait`");
+  });
+
+  it("points an uncursored wait at the Core rather than at a delivery it never made", async () => {
+    // `start --wait` and `session wait` carry no delivery stamp, so there is no
+    // `--since` to follow and the advice that names one would be a fiction.
+    await withRegisteredCore();
+    const run = await cli().run(["session", "start", "go", "--wait"], {
+      sessions: fakeSessionGateway({
+        start: async () =>
+          fakeStartedSession({
+            wait: async () => {
+              throw new CoreSessionLinkLostError({
+                sessionId: "session_1",
+                afterEventId: 0,
+                lastStatus: null,
+                reportedSinceDelivery: false,
+                graceMs: 0,
+                downMs: 0,
+                reason: null,
+              });
+            },
+          }),
+      }),
+    });
+
+    expect(run.code).toBe(EXIT_FAILURE);
+    expect(run.err.join("\n")).toContain("the turn's outcome is unknown");
+    expect(run.err.join("\n")).toContain("`actana session ls`");
+    expect(run.err.join("\n")).not.toContain("events tail --since");
   });
 
   it("does not offer the uncursored wait as the next step after any timeout", async () => {
@@ -984,6 +1283,16 @@ describe("actana session send", () => {
     expect(started.err.join("\n")).not.toContain("no turn end was reported");
   });
 
+  it("keeps the help's next step off `session wait` too", async () => {
+    const help = await cli().run(["session", "--help"]);
+    const text = help.out.join("\n");
+    // The prose and the runtime message have to agree, because an operator
+    // reads whichever they reach first.
+    expect(text).toContain("`wait` is not how you resume that wait");
+    expect(text).toContain("returns at once with the status from *before* your text and exits zero");
+    expect(text).toContain("actana events tail --since <event id>");
+  });
+
   it("says in its help what submits, what does not, and what each is not", async () => {
     const help = await cli().run(["session", "--help"]);
     const text = help.out.join("\n");
@@ -1004,8 +1313,13 @@ describe("actana session send", () => {
     //    it does to you.
     expect(text).toContain("It cannot be combined with");
     expect(text).toContain("refused before anything is written (#405)");
-    // 4. `submitted` and `enter` stay on the plain document, and the report fields sit beside them.
-    expect(text).toContain("added beside them, never in their place");
+    // ...and the deadline that verb carries, which is the other half of #405:
+    // a return that lands on a dialog starts no turn, so an unbounded default
+    // there is a wait nothing can end.
+    expect(text).toContain("`send --wait` is the exception");
+    expect(text).toContain("`--wait-timeout 0` waits with no\n  deadline");
+    // 4. `submitted` is on the plain document only, never the wait's (#289).
+    expect(text).toContain("**not** on the `--wait` document");
   });
 
   it("does not contradict itself 37 lines later (#462 review round 2)", async () => {
