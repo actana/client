@@ -1,0 +1,15 @@
+---
+"@actana/cli": minor
+---
+
+Restore the Control CLI behaviour that 0.6.0-next.5 and next.6 changed (actana/client#11, ported from actana/control at `feat/0.5.0`).
+
+**Behaviour change for anyone on a 0.6.0 prerelease: `actana session send` presses Enter again.** On next.5 and next.6 a send wrote the text and no carriage return, and `--enter` was what submitted it. Control's CLI has pressed Enter by default since #404, and a Core's orchestration scripts rely on it, so the default is Control's again: the text goes out, then a carriage return as its own write. `--no-enter` types without submitting, says on stderr that no turn was started, and cannot be combined with `--wait`. `--enter` is accepted and changes nothing on a send that carries text (a bare `send <id> --enter` is still a bare return), and `--enter` together with `--no-enter` is refused. A script that passed `--enter` keeps working; a script that relied on next.5's "no return" must now pass `--no-enter`.
+
+- `session send --json` keeps Control's `enter` (the request) and `submitted` (the outcome) beside `delivered` and `failed`; the report fields `turn` and `reportPath` are added beside them, never in their place.
+- A plain `send` works without the Shared folder. When `openShared` cannot attach, or the Core has no Shared folder, the text and the return still go out and one stderr line says no report block was appended. The report contract is unchanged when the folder is there (turn numbering, the appended block, `--turn`, `--no-block`, and `send --wait` settling on the report file). `send --wait` still needs the folder and refuses before writing anything. The Core appends the standard block only to a Session's starting prompt (control `pty-manager.ts`, issue 563), never to a follow-up write, so `send` appending its own turn's block cannot double it, and a text that already carries a block is left alone.
+- `--wait-timeout 0` means no deadline on `session start`, `resume`, `send --wait` and `wait`, as in Control; a negative value is still refused.
+- `--model`, `--search`, `--external-id`, `--provider`, `--template`, `--dimensions`, `--base-url`, `--top-k`, `--keyword-weight` and `--key-stdin` are unknown flags on every noun but `search`, as on Control's CLI, instead of being accepted and ignored.
+- The session help names `--no-enter` and carries Control's account of what submits a send, and the skill no longer says `--enter` is what submits. A new test holds every flag the skill shows to the parser.
+
+Control's pinned tests for `send`, the flag table and `session attach` (lock loss, Ctrl-C, keystroke count, no resize after the lock is lost, which already held) are carried into this repository as table-driven parity tests, so the next drift fails here.

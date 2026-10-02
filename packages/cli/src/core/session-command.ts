@@ -100,7 +100,7 @@ Usage
   actana session ls                         list Sessions on this Core
   actana session logs <session>             print the transcript, rendered
   actana session resume <session> [prompt]  start a Session that continues one
-  actana session send <session> <text>      write text into a running Session, with the report block
+  actana session send <session> <text>      write text into a running Session, and press Enter
   actana session wait <session>             block until the turn's report file lands
   actana session kill <session>             stop the harness running for it
   actana session attach <session>           watch a Session live, and type into it
@@ -110,7 +110,8 @@ Flags
   --json              machine-readable output. Only JSON reaches stdout.
   --wait              start/resume: block until the Core reports it settled
                       send: block until the report of the turn that text starts lands
-  --wait-timeout <s>  give up waiting after this many seconds, and say so
+  --wait-timeout <s>  give up waiting after this many seconds, and say so.
+                      0 means no deadline
   --await-prompt      start/resume: block only until the Core reports the
                       starting prompt delivered, so a \`send\` can follow safely
   --turn <n>          send/wait: which turn's report (default: send takes the next
@@ -118,7 +119,8 @@ Flags
   --harness <name>    start: ${KNOWN_HARNESSES.join(", ")}
   --title <text>      start: what the Session is called in \`ls\`
   --raw               logs: the bytes, escape codes and all, unrendered
-  --enter             send: follow the text with a carriage return
+  --enter             send: only meaningful with no text — a bare carriage return
+  --no-enter          send: type the text and send no return. This starts no turn
   --no-block          send: type the text as given, with no report block (to answer a dialog)
   --read-only         attach: watch without claiming the Session's write lock
   --dangerously-skip-permissions
@@ -210,11 +212,52 @@ Awaiting a turn
   says this side gave up. Without \`--wait-timeout\` there is no deadline: a turn
   takes as long as the work takes.
 
+Sending text, and what submits it
+  \`send <session> <text>\` **presses Enter** — that is, the text goes out and a
+  carriage return follows it as its own separate write, never glued onto the
+  text, and what the harness does with that return is the harness's. That is the
+  default because it is what the words mean: a send that left the characters in
+  the composer with no turn started looked delivered and was not (#404).
+
+  Separate is necessary and not sufficient. ADR 0026's second observed failure
+  is a return that was already its own write, 150 ms later, absorbed anyway by a
+  harness rendering the text as a paste; what answers that is the length-scaled
+  pause and the quiet gate on the **Core's** delivery path (ADR 0026 D6), which
+  a \`send\` does not have and does not grow one here. A long enough \`send\` can
+  still be pasted with its return eaten. A *starting* prompt, which does go
+  through that gate, is \`session start\`.
+
+  \`--no-enter\` is the opt-out, for typing without submitting: filling a
+  composer, or answering a numbered dialog before the return that confirms it.
+  It says so on the way out, every time, because a send that started no turn is
+  the failure this default exists to end. **It cannot be combined with
+  \`--wait\`**, which is refused before anything is written (#405): a send that
+  submits nothing has no turn to await. Type with \`--no-enter\`, then
+  \`actana session wait\` when a turn is actually running.
+
+  \`--json\` on a plain send says all of this in fields: \`enter\` is the return
+  that was **asked** for, \`submitted\` is the return that was **accepted**, and
+  they differ in exactly one case — the text landed and the return did not, where
+  \`failed\` then names the half that went missing so a script knows a resend
+  would submit the text twice. The report fields (\`turn\`, \`reportPath\`) are
+  added beside them, never in their place.
+
+  \`--enter\` is still accepted and does nothing on a send that carries text, so
+  a script written against the old default keeps working. On a send with no text
+  it is not a no-op: it is the way to say a bare carriage return is the whole
+  message.
+
+  Without the Shared folder, \`send\` still delivers the text: it cannot number
+  the turn or append the report block, and says so in one line on stderr. Only
+  \`--wait\` needs the folder, because it settles on the report file.
+
 Who delivers the prompt
   The Core does (ADR 0026). It waits for the harness to settle, answers the
-  dialog it opened, and writes the prompt, followed by the standard block. This CLI
-  adds no timing of its own, and \`send\` writes the text it is given followed by
-  that block — a lost prompt is a Core bug.`;
+  dialog it opened, and writes the prompt, followed by the standard block.
+  This CLI adds no timing of its own — no pause, no waiting for the harness to
+  look ready, no retry. \`send\` appends the report block of its turn, and
+  adds nothing but the carriage return the flags above asked for. A lost prompt
+  is a Core bug.`;
 
 /** Dispatch a `session` verb. `args.positionals` still has the noun on the front. */
 export async function runSessionCommand(
@@ -1053,8 +1096,24 @@ async function sessionSend(
   paths: RegistryPaths,
   rest: string[],
 ): Promise<number> {
-  const misused = misusedFlag(args, ["--enter", "--wait", "--wait-timeout", "--turn", "--no-block"]);
+  const misused = misusedFlag(args, ["--enter", "--no-enter", "--wait", "--wait-timeout", "--turn", "--no-block"]);
   if (misused) return usage(deps, "send", misused);
+
+  // Both spellings at once is not a preference this command can guess at: one asks for the return and
+  // the other refuses it, and picking a winner would carry out half of what was typed.
+  if (args.enter && args.noEnter) {
+    return usage(deps, "send", "--enter and --no-enter contradict each other — pass one");
+  }
+  // A send that submits nothing has nothing to wait for (Control #405): the pair is refused before a
+  // byte is written, rather than carried out and warned about afterwards.
+  if (args.noEnter && args.wait) {
+    return usage(
+      deps,
+      "send",
+      "--no-enter starts no turn, so --wait would have nothing to wait for — drop --no-enter to " +
+        "submit and wait, or drop --wait and run `actana session wait` when the turn is under way",
+    );
+  }
 
   const [sessionId, ...words] = rest;
   if (sessionId === undefined) {
@@ -1093,11 +1152,44 @@ async function sessionSend(
     return usage(deps, "send", "a bare carriage return starts no report — name the turn to wait for with --turn");
   }
 
+  // The one decision this verb makes about the return, made once and named: Enter unless it was refused
+  // (Control #404). `--enter` is not consulted — a send that carries text submits either way, and a send
+  // with no text got past the checks above only because `--enter` asked for the bare return.
+  const submit = !args.noEnter;
+
   return withGateway(deps, args, paths, "send", async (gateway, core) => {
     // A bare carriage return, or text sent with --no-block (an answer to a dialog), is not a
     // turn: no block, no report to number, and no Shared folder needed.
     if ((text.length === 0 || args.noBlock) && !args.wait) {
-      return deliverAndReport(deps, args, gateway, sessionId, text, null);
+      return deliverAndReport(deps, args, gateway, sessionId, text, null, submit);
+    }
+
+    // **A plain send must work without the Shared folder.** The block and the turn number need it; the
+    // text does not. When it cannot be reached, or the Core has none, the text still goes out, and one
+    // line on stderr says no report block was appended. A `--wait` has no report to settle on without
+    // the folder, so that one stays a refusal, before anything is written.
+    if (!args.wait) {
+      let handle: SharedHandle | null = null;
+      let turn: number | null = null;
+      let why = "";
+      try {
+        handle = await deps.openShared(core.blob, { timeoutMs: SESSION_TIMEOUT_MS });
+        turn = asked.turn ?? turnForSend(await listReportNames(handle.shared, sessionId));
+      } catch (err) {
+        why = messageOf(err);
+      } finally {
+        handle?.close();
+      }
+      if (turn === null) {
+        deps.err(
+          `actana session send: no report block was appended — the Shared folder of ${core.blob.endpoint} ` +
+            `is not available (${why}). The text is sent as given.`,
+        );
+        return deliverAndReport(deps, args, gateway, sessionId, text, null, submit);
+      }
+      deps.verbose(`sending ${text.length} characters and the report block (turn ${turn}) to session ${sessionId}`);
+      const body = appendPromptBlock(text, { sessionId, turn });
+      return deliverAndReport(deps, args, gateway, sessionId, body, { turn, characters: text.length }, submit);
     }
 
     return withShared(deps, args, "send", core.blob, async (handle) => {
@@ -1108,14 +1200,23 @@ async function sessionSend(
       const body = text.length === 0 ? text : appendPromptBlock(text, { sessionId, turn });
 
       deps.verbose(`sending ${text.length} characters and the report block (turn ${turn}) to session ${sessionId}`);
-      const code = await deliverAndReport(deps, args, gateway, sessionId, body, { turn, characters: text.length });
-      if (code !== EXIT_OK || !args.wait) return code;
+      const code = await deliverAndReport(deps, args, gateway, sessionId, body, { turn, characters: text.length }, submit);
+      if (code !== EXIT_OK) return code;
       return awaitReportAndPrint(deps, args, handle, sessionId, turn, cursor, timeout.ms);
     });
   });
 }
 
-/** Write the text (and the return, if asked), and say what was sent. */
+/**
+ * What `--no-enter` says on the way out, on every path that takes it (Control #404): a send that
+ * submits nothing is allowed, and it is never quiet. It says what *this process did* — no return went
+ * out and no turn was started by this send — and names the command that sends the return.
+ */
+const NOT_SUBMITTED_WARNING = (sessionId: string): string =>
+  `actana session send: --no-enter, so no carriage return followed the text — this send ` +
+  `started no turn. \`actana session send ${sessionId} --enter\` sends the carriage return.`;
+
+/** Write the text (and the return, unless refused), and say what was sent. */
 async function deliverAndReport(
   deps: ClientDeps,
   args: ParsedArgs,
@@ -1123,26 +1224,32 @@ async function deliverAndReport(
   sessionId: string,
   body: string,
   turn: { turn: number; characters: number } | null,
+  submit: boolean,
 ): Promise<number> {
-  // One call, one PTY resolution, both writes (#204 review). The command no
-  // longer decides anything about the return beyond passing on the flag.
-  const sent = await gateway.send(sessionId, body, { enter: args.enter });
+  // One call, one PTY resolution, both writes (#204 review). The command has decided whether there is a
+  // return; the gateway decides nothing and only writes what it was handed.
+  const sent = await gateway.send(sessionId, body, { enter: submit });
   const delivered = sent.ok;
   const characters = turn?.characters ?? body.length;
-  const andReturn = args.enter ? " and a carriage return" : "";
+  const andReturn = submit ? " and a carriage return" : "";
 
   if (args.wait && delivered) {
     // The wait prints the one document; this line is for a person.
     deps.err(`Sent ${characters} characters${turn ? " and the report block" : ""} to session ${sessionId}${andReturn}.`);
   } else if (args.json) {
+    // Two keys for the request and two for the outcome, kept apart on purpose (Control #404).
+    // `enter` is the **request**, the flag as the command resolved it; `submitted` is the **outcome**,
+    // a return that was asked for *and accepted*. They differ in the one case worth knowing about —
+    // the text landed and the return did not — and `failed` then says which half went missing, so a
+    // script can tell a safe resend from one that would submit the text twice. The report fields sit
+    // beside them, never in their place.
     deps.out(
       formatJson({
         sessionId,
         characters,
-        enter: args.enter,
+        enter: submit,
+        submitted: submit && sent.ok,
         delivered,
-        // Only on a failure, and it says which half went missing, so a script can tell a safe
-        // resend from one that would submit the text twice.
         ...(sent.ok ? {} : { failed: sent.failed }),
         ...(turn ? { turn: turn.turn, reportPath: sessionReportPath(sessionId, turn.turn) } : {}),
       }),
@@ -1156,6 +1263,10 @@ async function deliverAndReport(
       );
     }
   }
+  // On stderr even under `--json`, and after the document rather than instead of it: a send that
+  // started no turn is the failure this stopped being quiet about, and a script that only reads stdout
+  // still gets the fact in the `submitted` field.
+  if (sent.ok && !submit) deps.err(NOT_SUBMITTED_WARNING(sessionId));
   if (!sent.ok) {
     // Two failures, two messages, because the operator's next move differs.
     if (sent.failed === "text") {
@@ -1288,6 +1399,7 @@ const SESSION_FLAGS: ReadonlyArray<{ name: string; used: (args: ParsedArgs) => b
   { name: "--raw", used: (args) => args.raw },
   { name: "--no-block", used: (args) => args.noBlock },
   { name: "--enter", used: (args) => args.enter },
+  { name: "--no-enter", used: (args) => args.noEnter },
   { name: "--dangerously-skip-permissions", used: (args) => args.skipPermissions },
   { name: "--read-only", used: (args) => args.readOnly },
 ];
@@ -1310,11 +1422,16 @@ function misusedFlag(args: ParsedArgs, accepted: readonly string[]): string | nu
 }
 
 /**
- * `--wait-timeout <seconds>`, in milliseconds.
+ * `--wait-timeout <seconds>`, in milliseconds, or `null` for no deadline.
  *
- * Only with `--wait`, because on its own it is an instruction that cannot be
- * carried out — and a deadline somebody believes they set is worse than no
- * deadline at all. The wait it bounds is the SDK's; nothing here counts time.
+ * Only with `--wait`, because on its own it is an instruction that cannot be carried out — and a
+ * deadline somebody believes they set is worse than no deadline at all.
+ *
+ * **`0` means no deadline** on every verb that takes the flag, as it does on Control's CLI (#486): a
+ * script writing `--wait-timeout $(( deadline - $(date +%s) ))` is told its budget ran out only by a
+ * negative number, which is still a refusal. Only an exact `0` opts out; a positive number that rounds
+ * below a millisecond is a deadline the caller asked for, and it clamps to 1 ms rather than becoming
+ * an unbounded wait — the one direction a rounding error must never take.
  */
 function waitTimeoutMs(
   args: ParsedArgs,
@@ -1324,11 +1441,12 @@ function waitTimeoutMs(
   // `waiting` is for the one verb that *is* a wait: `session wait` takes no
   // `--wait` (the verb says it), so its deadline cannot be gated on the flag.
   if (!waiting) return { ms: null, error: "--wait-timeout only means something with --wait" };
-  const seconds = Number(args.waitTimeout);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
+  const seconds = args.waitTimeout.trim() === "" ? Number.NaN : Number(args.waitTimeout);
+  if (!Number.isFinite(seconds) || seconds < 0) {
     return { ms: null, error: `--wait-timeout wants a number of seconds, not "${args.waitTimeout}"` };
   }
-  return { ms: Math.round(seconds * 1000) };
+  if (seconds === 0) return { ms: null };
+  return { ms: Math.max(1, Math.round(seconds * 1000)) };
 }
 
 /**
