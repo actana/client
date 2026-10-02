@@ -147,7 +147,7 @@ export async function runClient(
   }
 
   if (!(head === "harness" && args.positionals[1] === "skills")) {
-    ensureOrchestrationSkillQuietly(clientDeps.home);
+    ensureOrchestrationSkillQuietly(clientDeps.home, clientDeps.env);
   }
 
   const paths = registryPaths(clientDeps.env, clientDeps.home);

@@ -244,7 +244,7 @@ function harnessSkills(deps: ClientDeps, args: ParsedArgs, rest: string[]): numb
     return EXIT_USAGE;
   }
 
-  const entries = ensureOrchestrationSkill(deps.home);
+  const entries = ensureOrchestrationSkill(deps.home, deps.env);
   const failed = entries.filter((entry) => entry.outcome === "failed");
 
   if (args.json) {
