@@ -178,6 +178,8 @@ export function fakeSessionGateway(overrides: Partial<SessionGateway> = {}): Ope
     resume: refuse("resume"),
     logs: refuse("logs"),
     send: refuse("send"),
+    wait: refuse("wait"),
+    sendAndWait: refuse("send --wait"),
     kill: refuse("kill"),
     close: () => {},
     ...overrides,

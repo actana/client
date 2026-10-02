@@ -96,6 +96,13 @@ export type ParsedArgs = {
   raw: boolean;
   /** `--no-block`: `session send` types the text as given: no report block, no turn. */
   noBlock: boolean;
+  /**
+   * `--no-enter`: type the text and send no carriage return after it (Control #404).
+   *
+   * A `send` presses Enter by default; this is the opt-out, for filling a composer or answering the
+   * numbered option of a dialog before the return that confirms it.
+   */
+  noEnter: boolean;
   /** `--enter`: follow sent text with a carriage return, because the operator asked. */
   enter: boolean;
   /** `--dangerously-skip-permissions`: start the harness without permission prompts. */
@@ -198,6 +205,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     label: null,
     raw: false,
     noBlock: false,
+    noEnter: false,
     enter: false,
     skipPermissions: false,
     readOnly: false,
@@ -277,6 +285,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
         break;
       case "--no-block":
         parsed.noBlock = true;
+        break;
+      case "--no-enter":
+        parsed.noEnter = true;
         break;
       case "--raw":
         parsed.raw = true;
