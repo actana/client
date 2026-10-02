@@ -3,7 +3,16 @@
 //   $XDG_CONFIG_HOME/actana/cores/<name>.txt    Core blob, mode 0600
 //   $XDG_CONFIG_HOME/actana/search/<name>.txt   Search blob, same format
 //   $XDG_CONFIG_HOME/actana/current.json        { core, search } pointers
-//   $XDG_CONFIG_HOME/actana/current.txt         legacy Core pointer (one release)
+//   $XDG_CONFIG_HOME/actana/current.txt         the Core pointer in its old spelling
+//
+// **One pointer, read from two files.** `current.json` is the pointer; `current.txt` is the same
+// Core name in the form Control's own CLI has written since before this registry had a JSON file, and
+// Control still writes only that one until actana/control issue 580 makes it write both. So a Core
+// that was selected by Control alone has a `current.txt` and no `current.json`, and one selected by
+// this client has both. Reading therefore prefers `current.json` and falls back to `current.txt`
+// when the JSON names no Core this machine has (absent, empty, malformed, or a Core since removed).
+// This client writes both on every change, which is what keeps the two files from disagreeing
+// when only the client touches them.
 //
 // On first access, profiles from ~/.actana-search/cli.json import into search/.
 // The legacy cli.json file continues to be read for one release when search/
@@ -299,12 +308,17 @@ export function writeCurrentPointers(paths: RegistryPaths, pointers: CurrentPoin
 /**
  * The `current` Core name, or null when nothing is selected.
  *
- * Reads current.json first, then the legacy current.txt pointer.
+ * Reads current.json first. When it names no usable Core — absent, empty, malformed, or a Core that
+ * has since been removed — it falls back to current.txt, the pointer Control's CLI writes (see the
+ * header). A name that is neither usable in the JSON nor in the text file is "nothing selected".
  */
 export function readCurrentCore(paths: RegistryPaths): string | null {
   ensureCredentialRegistry(paths);
-  const pointers = readCurrentJsonFile(paths);
-  const name = pointers?.core ?? readCurrentCoreFromTxtOnly(paths);
+  return usableCoreName(paths, readCurrentJsonFile(paths)?.core) ?? readCurrentCoreFromTxtOnly(paths);
+}
+
+/** The name when it is a valid Core name and a Core is registered under it, else null. */
+function usableCoreName(paths: RegistryPaths, name: string | null | undefined): string | null {
   if (!name || coreNameError(name) !== null) return null;
   return coreExists(paths, name) ? name : null;
 }
@@ -514,7 +528,9 @@ function importLegacySearchProfiles(paths: RegistryPaths): void {
 
 function syncCurrentJsonFromLegacy(paths: RegistryPaths): void {
   const existing = readCurrentJsonFile(paths);
-  const core = existing?.core ?? readCurrentCoreFromTxtOnly(paths);
+  // The JSON's Core when it still names one, else the text pointer's — the same order as
+  // `readCurrentCore`, so the file this writes never disagrees with what a read answers.
+  const core = usableCoreName(paths, existing?.core) ?? readCurrentCoreFromTxtOnly(paths) ?? existing?.core ?? null;
   const legacy = readLegacyCliConfig(paths.legacySearchCliJson);
   const search =
     existing?.search ??
