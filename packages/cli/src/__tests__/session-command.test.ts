@@ -266,7 +266,7 @@ describe("actana session ls", () => {
       start: async () => fakeStartedSession(),
       resume: async () => fakeStartedSession(),
       logs: async () => ({ sessionId: "session_1", ptyId: "pty_1", screen: "a screen", raw: "raw" }),
-      send: async () => true,
+      send: async () => ({ ok: true }),
       kill: async () => ({ ptyId: "pty_1", killed: true }),
       list: async () => [row()],
     });
@@ -503,7 +503,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
       list: async () => [row({ status, live: status === "running" })],
       send: async (_id, text, opts) => {
         events.push(`send ${JSON.stringify(text)} enter=${opts?.enter === true}`);
-        return true;
+        return { ok: true };
       },
     });
     return { shared, events, gateway, folder: () => shared.folder() };
@@ -702,7 +702,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
           w.events.push(`send ${text}`);
           void opts;
           await w.folder().put(REPORT_2, FINISHED);
-          return true;
+          return { ok: true };
         },
       });
 
@@ -729,7 +729,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
         send: async () => {
           order.push("write");
           setTimeout(() => void folder.put(REPORT_2, FINISHED), 15);
-          return true;
+          return { ok: true };
         },
       });
 
@@ -762,7 +762,7 @@ describe("actana session wait, and send --wait (client #8): the report file sett
       const w = world();
 
       const run = await cli().run(["session", "send", "session_1", "go", "--wait", "--wait-timeout", "5"], {
-        sessions: fakeSessionGateway({ send: async () => false }),
+        sessions: fakeSessionGateway({ send: async () => ({ ok: false, failed: "text" }) }),
         shared: w.shared.open,
       });
 
@@ -820,7 +820,7 @@ describe("actana session send", () => {
     fakeSessionGateway({
       send: async (_sessionId, text, opts) => {
         writes.push({ text, enter: opts?.enter });
-        return true;
+        return { ok: true };
       },
     });
 
@@ -973,7 +973,7 @@ describe("actana session send", () => {
       sessions: fakeSessionGateway({
         send: async (_sessionId, text, opts) => {
           calls.push({ text, enter: opts?.enter });
-          return true;
+          return { ok: true };
         },
       }),
       stdin: "",
@@ -985,7 +985,7 @@ describe("actana session send", () => {
   it("fails when the Core declined the write", async () => {
     await withRegisteredCore();
     const run = await cli().run(["session", "send", "session_1", "hello"], {
-      sessions: fakeSessionGateway({ send: async () => false }),
+      sessions: fakeSessionGateway({ send: async () => ({ ok: false, failed: "text" }) }),
       shared: sharedFolder().open,
     });
     expect(run.code).toBe(EXIT_FAILURE);

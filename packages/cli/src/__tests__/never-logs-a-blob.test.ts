@@ -240,7 +240,7 @@ describe("no verb prints a blob, with --verbose on", () => {
       start: async () => fakeStartedSession(),
       resume: async () => fakeStartedSession(),
       logs: async () => ({ sessionId: "session_1", ptyId: "pty_1", screen: "a screen", raw: "raw" }),
-      send: async () => true,
+      send: async () => ({ ok: true }),
     });
 
     const runs: Array<[string, string[], typeof refusing]> = [

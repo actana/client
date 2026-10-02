@@ -38,10 +38,17 @@ import {
   CoreSession,
   HARNESS_LAUNCH_COMMANDS,
 } from "@actana/sdk/core";
+import {
+  SESSION_PROMPT_ABANDONED_EVENT_KIND,
+  SESSION_PROMPT_DELIVERED_EVENT_KIND,
+} from "@actana/sdk/core";
 import { TerminalScreen, DEFAULT_COLS, DEFAULT_ROWS } from "@actana/sdk/core";
 import { harnessResumeCommand } from "./harness-resume.ts";
 import type {
+  CoreLinkEvent,
   CoreLinkPtySpawnHarness,
+  CoreLinkSessionPromptAbandonedPayload,
+  CoreLinkSessionPromptDeliveredPayload,
   CoreLinkSessionLockState,
   CoreLinkSessionRow,
 } from "@actana/sdk/core";
@@ -184,9 +191,98 @@ export type StartedSession = {
   wait(opts: { timeoutMs?: number }): Promise<SessionOutcome>;
   /** The rendered transcript, read while the Session is alive. */
   screen(): string;
+  /**
+   * Did the Core give up on delivering this Session's starting prompt (#483)?
+   *
+   * `null` while nothing says otherwise, which is the ordinary case and also
+   * the honest answer on a connection that hung up before the Core decided —
+   * delivery runs on the Core's clock and a `start` without `--wait` is gone
+   * long before it (#129 D6).
+   *
+   * A reason means the prompt **is not in the harness**. That is a different
+   * thing from the `needs-input` it produces, which on its own reads as "the
+   * harness stopped to ask something" — the reading that invites a `session
+   * send` in reply. There is no question here and no turn to answer: the text
+   * has to go again.
+   */
+  promptAbandoned(): { reason: string } | null;
+  /**
+   * What the Core has said about the starting prompt so far — without waiting
+   * (#495 gate review, addendum blocker 6).
+   *
+   * `null` means "nothing yet", which is not the same as "nothing bad", and
+   * that distinction is the whole reason this exists. `--wait` used to derive a
+   * delivery from the *absence* of {@link promptAbandoned}, and a harness that
+   * exits mid-delivery is precisely where absence lies: the Core appends its
+   * reason row and then emits the exit, the exit resolves the wait, and the row
+   * is still in flight. The Core now flushes the rows ahead of the exit so the
+   * row is there to read — and when it genuinely is not there, this answers
+   * `null` and the caller says so rather than claiming a delivery.
+   *
+   * Reads only what has already arrived. It cannot block and it cannot hang.
+   */
+  promptDeliveryReport(): PromptDeliveryReport | null;
+  /**
+   * Block until the Core says what became of this Session's starting prompt
+   * (#395).
+   *
+   * The readiness gate `session start` never had. A start returns as soon as
+   * the Core has the Session running (#129 D6), which is well before the
+   * harness can take a keystroke: the composer is not up, the trust dialog may
+   * not even have been drawn yet, and a `session send` at that moment lands in
+   * a buffer that discards it — taking the starting prompt with it. This waits
+   * for the Core's own verdict on the prompt, and the verdict is the readiness:
+   * a harness that took the text is a harness that is listening.
+   *
+   * **It waits on the Core, and adds no timing of its own.** Nothing here
+   * polls, nudges, retries or measures how quiet the output went — #191 deleted
+   * the last thing that did, and only the Core sees the screen (ADR 0026). The
+   * wait ends when the Core says `delivered`, when it says `abandoned` at its
+   * own per-harness ceiling (#483), or when the connection carrying those
+   * answers goes down.
+   */
+  awaitPromptDelivery(): Promise<PromptDeliveryReport>;
   /** Release the listeners this Session holds. The harness keeps running. */
   dispose(): void;
 };
+
+/**
+ * What the Core said about a starting prompt, or why it did not get to say.
+ *
+ * Four outcomes and not two, because the two that are not the Core's verdict
+ * have to stay distinguishable from it. `unavailable` is **not** a failed
+ * delivery: the prompt may well have landed a second later, and reporting it as
+ * a loss would be the same false report #483 removed, pointed the other way. It
+ * is this side saying it stopped being able to hear.
+ */
+export type PromptDeliveryReport =
+  /** A composer was seen on screen, the prompt went into it, and it was submitted. */
+  | { outcome: "delivered" }
+  /** The Core gave up. The harness is running and has never seen the text. */
+  | { outcome: "abandoned"; reason: string }
+  /**
+   * The Core typed, and never saw a composer to type into (#494 review).
+   *
+   * A harness with no row in the Core's readiness table has no marker to match,
+   * so `composerOnScreen` is `true` for it from the first byte and the prompt
+   * goes out when the screen stops moving. That is #483's deliberately
+   * preserved generic backstop and it is fine as a *delivery* strategy — but it
+   * is not evidence: a screen that has stopped moving is as easily a dialog.
+   * Reported apart from `delivered` because this flag's contract is that a zero
+   * exit means the harness took the text.
+   *
+   * **No harness this build ships is in that state.** #277 gave `codex` the
+   * last outstanding readiness row, so `opencode`, `cursor-cli`, `claude-code`
+   * and `codex` all have markers and all deliver as `delivered`. This outcome
+   * is for the harness added after them: `HARNESS_READINESS` has a working
+   * default for ids that are not in it, so a new harness arrives marker-less
+   * and would otherwise have this flag reporting a readiness nobody
+   * established on the day it shipped. It joins the others the moment it gets
+   * a row, with nothing to change here.
+   */
+  | { outcome: "unverified"; reason: string }
+  /** No verdict was heard, and this side says which of its own limits stopped it. */
+  | { outcome: "unavailable"; reason: string };
 
 /** What `actana session logs` reads back. */
 export type SessionLogs = {
@@ -198,6 +294,29 @@ export type SessionLogs = {
   raw: string;
 };
 
+/**
+ * What one `send` got onto the PTY (ported from Control).
+ *
+ * A boolean was enough while there was only ever one write. A send with `enter` is two — the text,
+ * then the carriage return that submits it — and two writes have **three** outcomes, not two. The
+ * one a boolean cannot express is the one that matters: the text landed and the return did not.
+ *
+ * That case is not "the write was refused", and reporting it as such tells the operator to do the
+ * single worst thing available — send again, which carries a return of its own and submits the text
+ * twice. `failed` lets the caller say which half went missing, and therefore whether a resend is safe.
+ */
+export type SendResult =
+  /** Everything the caller asked for is on the PTY. */
+  | { ok: true }
+  /** Nothing was written. The text was refused, so sending it again is safe. */
+  | { ok: false; failed: "text" }
+  /**
+   * **Whatever text there was is on the PTY and the carriage return is not**, so no turn was
+   * started. Text that landed must not be sent again; the return alone finishes it. On a send that
+   * carried no text — a bare `--enter` — there is nothing to have half-landed.
+   */
+  | { ok: false; failed: "carriage-return" };
+
 /** Everything the `session` noun asks of a Core, and nothing else. */
 export type SessionGateway = {
   /** Every Session on this Core. Never filters by Project — there are none. */
@@ -206,12 +325,14 @@ export type SessionGateway = {
   resume(request: SessionResumeRequest): Promise<StartedSession>;
   logs(sessionId: string): Promise<SessionLogs>;
   /**
-   * Write text to a running Session, verbatim. Resolves false if the Core
-   * declined. `enter` adds a carriage return as a **separate write to the same
-   * PTY**, resolved once for both, so there is no window between them in which
-   * the text lands and the return is sent somewhere else — or nowhere.
+   * Write text to a running Session, verbatim. `enter` adds a carriage return as a **separate write
+   * to the same PTY**, resolved once for both, so there is no window between them in which the text
+   * lands and the return is sent somewhere else — or nowhere.
+   *
+   * Answers with {@link SendResult} rather than a boolean, because two writes have three outcomes and
+   * only one of them is "nothing happened".
    */
-  send(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<boolean>;
+  send(sessionId: string, text: string, opts?: { enter?: boolean }): Promise<SendResult>;
   /** Kill the harness running for this Session, whoever started it. */
   kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }>;
   close(): void;
@@ -229,6 +350,11 @@ export type OpenSessionGateway = (
  * Connecting here rather than per verb is deliberate — every `session` verb
  * needs a live socket, and a command that dialled twice would double the
  * latency of the fast path (`ls`) for no gain.
+ *
+ * **The client must arrive unsubscribed, and this is where that stays true.** A fresh, non-durable
+ * `CoreClient` per gateway is what lets {@link openPromptDeliveryLatch} own the `subscribe` and
+ * therefore trust the `eventsReplayed` marker it floors on; an already-subscribed client leaves the
+ * latch with no floor, and it says so (`unavailable`) rather than answering wrongly.
  */
 export const openSessionGateway: OpenSessionGateway = async (blob, opts) => {
   const client = CoreClient.fromRegistrationBlob(blob, {
@@ -284,13 +410,13 @@ class CoreLinkSessionGateway implements SessionGateway {
   async start(request: SessionStartRequest): Promise<StartedSession> {
     const harness = request.harness ?? DEFAULT_HARNESS;
 
-    const session = await this.begin({
+    const { session, latch } = await this.begin({
       harness,
       title: request.title ?? titleFor(request.prompt),
       prompt: request.prompt,
       dangerouslySkipPermissions: request.dangerouslySkipPermissions,
     });
-    return wrap(session, { harness });
+    return wrap(session, { latch, harness });
   }
 
   async resume(request: SessionResumeRequest): Promise<StartedSession> {
@@ -325,7 +451,7 @@ class CoreLinkSessionGateway implements SessionGateway {
       );
     }
 
-    const session = await this.begin({
+    const { session, latch } = await this.begin({
       sessionId: row.sessionId,
       harness: row.agent,
       command: harnessResumeCommand(row.agent, row.claudeSessionId, {
@@ -334,7 +460,7 @@ class CoreLinkSessionGateway implements SessionGateway {
       prompt: request.prompt,
       dangerouslySkipPermissions: request.dangerouslySkipPermissions,
     });
-    return wrap(session, { harness: row.agent });
+    return wrap(session, { latch, harness: row.agent });
   }
 
   async logs(sessionId: string): Promise<SessionLogs> {
@@ -351,7 +477,7 @@ class CoreLinkSessionGateway implements SessionGateway {
     return { sessionId, ptyId, screen: terminal.text(), raw: replay.data };
   }
 
-  async send(sessionId: string, text: string, opts: { enter?: boolean } = {}): Promise<boolean> {
+  async send(sessionId: string, text: string, opts: { enter?: boolean } = {}): Promise<SendResult> {
     // One resolution for the whole verb. Resolving again for the return would
     // open a window — the harness exits between the two round trips, the text
     // has landed, and the command reports a failure after a partial delivery.
@@ -360,9 +486,15 @@ class CoreLinkSessionGateway implements SessionGateway {
     // Verbatim, and that is the whole verb. See rule 1: nothing is appended,
     // nothing is timed, nothing is retried. The return, when it was asked for,
     // is its own write of its own byte — never glued to the text.
-    if (text.length > 0 && !(await this.client.write(ptyId, text))) return false;
-    if (!opts.enter) return true;
-    return this.client.write(ptyId, "\r");
+    if (text.length > 0 && !(await this.client.write(ptyId, text))) {
+      return { ok: false, failed: "text" };
+    }
+    if (!opts.enter) return { ok: true };
+    // **Its own failure.** The text is already on the PTY here, so reporting this as "the write was
+    // refused" would tell an operator to send again, which now carries a return and submits the text
+    // twice.
+    if (!(await this.client.write(ptyId, "\r"))) return { ok: false, failed: "carriage-return" };
+    return { ok: true };
   }
 
   async kill(sessionId: string): Promise<{ ptyId: string; killed: boolean }> {
@@ -380,7 +512,14 @@ class CoreLinkSessionGateway implements SessionGateway {
     this.client.close();
   }
 
-  /** Start a Session, translating the SDK's refusal into a gateway error. */
+  /**
+   * Start a Session, translating the SDK's refusal into a gateway error.
+   *
+   * The prompt-delivery latch is opened here rather than by the caller because *here* is before
+   * `CoreSession.start` — before the subscribe, before the spawn. A latch opened after that resolves
+   * has already missed the window a fast abandon lands in. It is handed back unarmed; `wrap` arms it
+   * once there is a Session id to bind it to.
+   */
   private async begin(opts: {
     sessionId?: string;
     harness: CoreLinkPtySpawnHarness;
@@ -388,9 +527,10 @@ class CoreLinkSessionGateway implements SessionGateway {
     command?: string;
     prompt?: string;
     dangerouslySkipPermissions: boolean;
-  }): Promise<CoreSession> {
+  }): Promise<{ session: CoreSession; latch: PromptDeliveryLatch }> {
+    const latch = openPromptDeliveryLatch(this.client);
     try {
-      return await CoreSession.start(this.client, {
+      const session = await CoreSession.start(this.client, {
         ...(opts.sessionId ? { sessionId: opts.sessionId } : {}),
         ...(opts.title ? { title: opts.title } : {}),
         ...(opts.command ? { command: opts.command } : {}),
@@ -401,7 +541,9 @@ class CoreLinkSessionGateway implements SessionGateway {
         ...(opts.dangerouslySkipPermissions ? { dangerouslySkipPermissions: true } : {}),
         harness: opts.harness,
       });
+      return { session, latch };
     } catch (err) {
+      latch.close();
       throw new SessionGatewayError("refused", messageOf(err), { cause: err });
     }
   }
@@ -431,17 +573,360 @@ class CoreLinkSessionGateway implements SessionGateway {
 }
 
 /**
+ * Watches one Core connection for what became of a Session's starting prompt.
+ *
+ * Both halves of it, since issue 395: the `session:promptAbandoned` row #483
+ * put on the wire, and the `session:promptDelivered` row that is its positive
+ * twin. One latch and not two, because the two rows are the two ends of one
+ * question and a caller asking "did the prompt land" must not be able to hear
+ * one of them and miss the other.
+ *
+ * **Why the positive row had to exist at all.** #483 could report a loss from
+ * the absence of nothing — it waited for a turn to end and read the abandon row
+ * if one had come. #395 cannot: it is the *start* return path, and at the
+ * moment a `start` returns the Core has not attempted delivery yet. "No abandon
+ * row" and "the composer is still not up" are the same silence there, so a
+ * command that read the first as evidence of delivery would be claiming a
+ * readiness nobody established — which is the defect, not the fix.
+ *
+ * Three things have to be true for either report to be trustworthy, and the
+ * first version of this got two of them wrong (review of PR #487).
+ *
+ * **1. It has to be listening before anything asks the Core a question.** The
+ * event stream opens with `subscribeEvents`, and both `CoreSession.start` and
+ * `CoreSession.attach` send one at the top and then spend several round trips —
+ * `createSession`/`spawn`, or `findBySession`/`ptySubscribe`/`replay`/`seedStatus` —
+ * before their own listeners exist. A latch registered after those resolve is
+ * deaf for the whole window, and the window is exactly where a fast abandon
+ * lands. So this opens *first* and holds what it hears until it knows which
+ * Session and which cursor it is holding it for — the same shape as
+ * `CoreSession.start`'s `heldEvents`, and for the same reason.
+ *
+ * It also sends the `subscribe` itself when nobody has, which is what makes the
+ * replay marker below dependable: the marker belongs to a subscribe, and a
+ * subscribe this function did not cause is a subscribe whose marker may already
+ * be in the past.
+ *
+ * **2. A row from a previous life is not a report about this command.** The
+ * event log is durable and `subscribe` replays it from the beginning, so a
+ * Session whose *first* start was abandoned carries that row forever. Latching
+ * it would fail a `session send … --wait` that landed perfectly — and `send` is
+ * the recovery this feature's own error message recommends, so misreading it is
+ * the same false report as the one #483 exists to kill, pointed the other way.
+ * Hence the floor: a stamped delivery counts from its own stamp, and everything
+ * else counts from `eventsReplayed`, which is the Core saying "everything up to
+ * here was already history when you asked".
+ *
+ * **3. Silence is not a report.** Until the floor is known, nothing is
+ * accepted — events are held, not dropped, and re-judged once it is.
+ */
+export type PromptDeliveryLatch = {
+  /** Bind the latch to a Session and, for a stamped delivery, to its cursor. */
+  arm(opts: { sessionId: string; ptyId: string; afterEventId: number }): void;
+  /** The Core's reason, or `null` while it has not said the prompt was lost. */
+  reason(): { reason: string } | null;
+  /**
+   * What the Core has said so far, or `null` while it has said nothing.
+   *
+   * The non-blocking half of {@link settled}, for a caller that has finished
+   * waiting on something else and needs to know what this latch heard while it
+   * did — without adding a second wait, and therefore without adding a way to
+   * hang (#495 gate review, addendum blocker 6).
+   */
+  current(): PromptDeliveryReport | null;
+  /** Resolve once the Core has said what became of the starting prompt. */
+  settled(): Promise<PromptDeliveryReport>;
+  /** Release the listeners. The subscription on the Core is the client's. */
+  close(): void;
+};
+
+export function openPromptDeliveryLatch(client: CoreClient): PromptDeliveryLatch {
+  let sessionId: string | null = null;
+  /** The PTY this command's Session is running on, once `wrap` knows it. */
+  let ptyId: string | null = null;
+  /** PTYs seen to exit before this latch knew which one was its own. */
+  const exitedPtys = new Set<string>();
+  /** The stamp a delivery was recorded at, when this command made one. */
+  let cursor = 0;
+  let armed = false;
+  /**
+   * Where the Core's log ended when this command's subscribe was taken up, or
+   * `null` while that is unknown — and it stays unknown on a Core that cannot
+   * say (#395, and the review of #494 that found the hole).
+   *
+   * **This used to be the `eventsReplayed` marker, and that was the bug.** The
+   * marker is the id of the last row the socket was actually *sent*, and
+   * `handleSubscribe` caps the tail it sends at `EVENT_TAIL_LIMIT` — a thousand
+   * rows. Nothing prunes the log. So on any Core past a few days of use the
+   * marker landed around a thousand, the remaining history arrived behind it
+   * through `pushLiveEvents` as ordinary `event` frames, and every historical
+   * `session:promptDelivered` above id 1000 cleared the floor and was judged as
+   * *this* command's verdict — an instant exit 0 on a start whose prompt the
+   * Core had not typed a character of. The mirror case failed a start whose
+   * prompt landed perfectly, off an abandon row from last Tuesday.
+   *
+   * #487's review reasoned that "every replayed row is necessarily below the
+   * marker". That is true exactly when the marker is the tip, and now it is one:
+   * the Core reports `tipEventId` beside it, read before the tail, so every row
+   * that existed when this command asked is at or below it.
+   */
+  let tipAtSubscribe: number | null = null;
+  let abandoned: { reason: string } | null = null;
+  /** What the Core has said about this prompt, once it has said anything. */
+  let report: PromptDeliveryReport | null = null;
+  const waiting: Array<(report: PromptDeliveryReport) => void> = [];
+  const held: CoreLinkEvent[] = [];
+
+  /** Answer everybody waiting, once, with the first thing the Core said. */
+  const conclude = (next: PromptDeliveryReport): void => {
+    if (report) return;
+    report = next;
+    while (waiting.length > 0) waiting.shift()!(next);
+  };
+
+  const concludeOnExit = (): void => {
+    conclude({
+      outcome: "unavailable",
+      reason: "the harness exited before the Core reported what became of the prompt",
+    });
+  };
+
+  /**
+   * The exclusive floor an event has to clear, or `null` while it is unknown.
+   *
+   * A stamped delivery knows its own floor the moment it is armed and does not
+   * have to wait for the marker; it still takes the larger of the two, because
+   * a cursor that predates the replay would let history back in.
+   */
+  const floor = (): number | null => {
+    if (cursor > 0) return Math.max(cursor, tipAtSubscribe ?? 0);
+    return tipAtSubscribe;
+  };
+
+  const consider = (event: CoreLinkEvent): void => {
+    // Keyed on the Core's own verdict, never on "some conclusion was reached"
+    // (#494 review, observation b). `report` is also set by a dropped link and
+    // by the harness exiting, and an abandon that arrives after one of those is
+    // still the Core saying the prompt was lost — `promptAbandoned()` is #483's
+    // accessor and must not answer a clean delivery because something else
+    // happened to speak first.
+    if (abandoned) return;
+    if (event.sessionId !== sessionId) return;
+    const bar = floor();
+    if (bar === null || event.eventId <= bar) return;
+    if (event.kind === SESSION_PROMPT_DELIVERED_EVENT_KIND) {
+      // **Two things are read out of this payload and only two: the fact, and
+      // whether a composer was ever seen** (#494 review, blocker 3). The
+      // numbers beside them — `characters`, `waitedMs` — are for an operator
+      // reading `actana events tail`, and a command that decided anything from
+      // a measurement would be back to inferring readiness.
+      //
+      // `composerObserved: false` is the Core saying it typed on the quiet gap
+      // into a harness whose composer it has never been shown. Calling that
+      // `delivered` would be this flag reporting success for a prompt that may
+      // have gone into a dialog — the failure #395's acceptance criterion names
+      // by hand. Every harness this build ships has a marker since #277, so the
+      // false branch is the guard for the next one added rather than a state
+      // any of them reach.
+      let observed: boolean;
+      try {
+        const payload = JSON.parse(event.payload) as CoreLinkSessionPromptDeliveredPayload;
+        observed = payload.composerObserved === true;
+      } catch {
+        // Fail closed. An unparseable payload is not evidence that a composer
+        // was seen, and this flag's whole contract is that a zero exit means it
+        // was.
+        observed = false;
+      }
+      conclude(
+        observed
+          ? { outcome: "delivered" }
+          : {
+              outcome: "unverified",
+              reason:
+                "the Core typed the prompt on its quiet gap without ever seeing this harness's " +
+                "composer — it has no composer marker, so nothing observed that the text went " +
+                "anywhere a harness was reading",
+            },
+      );
+      return;
+    }
+    try {
+      const payload = JSON.parse(event.payload) as CoreLinkSessionPromptAbandonedPayload;
+      abandoned = { reason: typeof payload.reason === "string" ? payload.reason : "" };
+    } catch {
+      // A payload this build cannot parse is still the Core saying it gave up,
+      // and the fact is worth more than the sentence.
+      abandoned = { reason: "" };
+    }
+    conclude({ outcome: "abandoned", reason: abandoned.reason });
+  };
+
+  const drain = (): void => {
+    if (!armed || floor() === null) return;
+    while (held.length > 0) consider(held.shift()!);
+  };
+
+  // Registered before the subscribe below, so the replay this asks for cannot
+  // outrun the listener that is meant to judge it.
+  const stopEvents = client.onEvent(({ event }) => {
+    if (
+      event.kind !== SESSION_PROMPT_ABANDONED_EVENT_KIND &&
+      event.kind !== SESSION_PROMPT_DELIVERED_EVENT_KIND
+    ) {
+      return;
+    }
+    if (!armed || floor() === null) {
+      held.push(event);
+      return;
+    }
+    consider(event);
+  });
+  const stopReplayed = client.onEventsReplayed(({ tipEventId }) => {
+    // The first marker only. It answers "what was already in the log when this
+    // command started", and a later one — a reconnect's replay — would move the
+    // floor forward over live events this command is entitled to.
+    if (tipAtSubscribe !== null) return;
+    if (tipEventId === undefined) {
+      // **A Core that cannot say where its log ends cannot report this
+      // either** (#494 review, blocker 2). Two Cores answer this way and both
+      // matter: one built before `session:promptDelivered` existed, which will
+      // never append the row a wait here is waiting for; and one running with
+      // no event-log port wired, which cannot append any row at all. Left to
+      // wait, `--await-prompt` would block until the operator killed it.
+      //
+      // So the absence is the answer, and it arrives one frame after the
+      // subscribe rather than never. This is the same shape `send --wait` uses
+      // for the same class of Core — refuse rather than guess — moved to the
+      // one signal available before anything has been typed.
+      conclude({
+        outcome: "unavailable",
+        reason:
+          "this Core does not report where its event log ends, so it cannot report whether the " +
+          "prompt reached the harness — it is either older than that report or running with no " +
+          "event log at all",
+      });
+      return;
+    }
+    tipAtSubscribe = tipEventId;
+    drain();
+  });
+  // The socket went away before the Core said anything. Not a delivery and not
+  // an abandon — the Core may well have delivered the prompt a second later —
+  // so it settles a waiter without ever touching `abandoned`, whose meaning is
+  // "the Core said it gave up" and must stay that.
+  //
+  // This is also the only unbounded wait on this path that a clock could
+  // otherwise be reached for, and reaching for one is barred here for the
+  // reason `no-prompt-timing.test.ts` gives: a module on the path from an
+  // operator's text to a harness's stdin schedules nothing. It does not need
+  // to. The wait ends on one of the Core's three answers — delivered,
+  // abandoned at its own per-harness ceiling (ADR 0026, #483), or the row
+  // `pty-manager` appends when the PTY dies mid-delivery — or on this, the
+  // connection carrying them going down.
+  const stopDisconnected = client.onDisconnected(({ error }) => {
+    conclude({
+      outcome: "unavailable",
+      reason: error
+        ? `the connection to the Core went down (${error})`
+        : "the connection to the Core went down",
+    });
+  });
+  // And the harness itself going away, which is the bound that survives a Core
+  // whose event log has stopped accepting rows (#494 review, blocker 2). An
+  // `exit` frame is not a log row — it comes off the PTY subscription — so it
+  // arrives even when nothing can be appended, and a harness that is gone will
+  // never take a prompt. `pty-manager` also appends a reason row in this case
+  // and that row is the better answer when it comes; this only speaks when the
+  // exit reaches the client with no verdict behind it.
+  const stopExit = client.onExit((frame) => {
+    // Held before the latch is armed, for the same reason the event rows are:
+    // a PTY that dies inside the spawn round trip does it before this side has
+    // been told which PTY it owns, and an exit dropped in that window is the
+    // deaf-window bug wearing a different frame.
+    if (ptyId === null) {
+      exitedPtys.add(frame.ptyId);
+      return;
+    }
+    if (frame.ptyId !== ptyId) return;
+    concludeOnExit();
+  });
+  // The subscribe this latch depends on. `CoreSession.start`/`attach` would
+  // send one a moment later on the same test, so this is the same single
+  // subscribe moved earlier, not a second one.
+  //
+  // **A client that arrives already subscribed cannot be judged** (#487 review,
+  // observation a). The floor below is the `eventsReplayed` marker of a
+  // subscribe *this* function caused; without one the marker never comes, the
+  // floor is never known, and every row is held for ever. #483 answered that
+  // with silence, which reads as "the prompt was fine". A wait cannot: it would
+  // hang for as long as the operator let it. So the latch records that it is
+  // deaf and says so instead, and `openSessionGateway` — which builds a fresh
+  // client per gateway — is where the invariant is kept.
+  const floorless = client.isSubscribedToEvents();
+  if (!floorless) client.subscribeEvents();
+  if (floorless) {
+    conclude({
+      outcome: "unavailable",
+      reason:
+        "this Core connection was already subscribed to the event log, so there is no replay " +
+        "marker to tell a live report from a replayed one",
+    });
+  }
+
+  return {
+    arm: (opts) => {
+      sessionId = opts.sessionId;
+      ptyId = opts.ptyId;
+      cursor = opts.afterEventId;
+      armed = true;
+      drain();
+      if (exitedPtys.has(ptyId)) concludeOnExit();
+      exitedPtys.clear();
+    },
+    reason: () => abandoned,
+    current: () => report,
+    settled: () =>
+      report
+        ? Promise.resolve(report)
+        : new Promise<PromptDeliveryReport>((resolve) => waiting.push(resolve)),
+    close: () => {
+      stopEvents();
+      stopReplayed();
+      stopDisconnected();
+      stopExit();
+      held.length = 0;
+      exitedPtys.clear();
+      // Nobody is left waiting on a latch this command has finished with. The
+      // ordinary path awaits before disposing; this is for the paths that throw.
+      conclude({
+        outcome: "unavailable",
+        reason: "this command stopped listening before the Core said what became of the prompt",
+      });
+    },
+  };
+}
+
+/**
  * Present one `CoreSession` as a {@link StartedSession}.
  *
  * `harness` is passed in rather than read off the Session: a spawn knows it
  * because it asked for it.
+ *
+ * `latch` is the prompt-delivery report (#483, #395). It is **opened by the caller, before the
+ * Session exists**, and only armed here: see {@link openPromptDeliveryLatch} for why the ordering
+ * is the whole of it. This function still lets no frame, no `CoreSession` and no client escape to
+ * the command module.
  */
 function wrap(
   session: CoreSession,
   opts: {
+    latch: PromptDeliveryLatch;
     harness: string | null;
   },
 ): StartedSession {
+  // Now — and not before — the report knows which Session it has to be about.
+  opts.latch.arm({ sessionId: session.sessionId, ptyId: session.ptyId, afterEventId: 0 });
   return {
     sessionId: session.sessionId,
     ptyId: session.ptyId,
@@ -459,7 +944,13 @@ function wrap(
       };
     },
     screen: () => session.screen(),
-    dispose: () => session.dispose(),
+    promptAbandoned: () => opts.latch.reason(),
+    promptDeliveryReport: () => opts.latch.current(),
+    awaitPromptDelivery: () => opts.latch.settled(),
+    dispose: () => {
+      opts.latch.close();
+      session.dispose();
+    },
   };
 }
 
