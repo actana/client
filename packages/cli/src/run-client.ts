@@ -82,6 +82,23 @@ function validateGlobalFlags(
   return null;
 }
 
+/** The first flag that only `search` takes, when one was passed to another noun. */
+function searchOnlyFlagUsed(args: ReturnType<typeof parseArgs>): string | null {
+  const used: Array<[string, boolean]> = [
+    ["--search", args.search !== null],
+    ["--external-id", args.externalId !== null],
+    ["--provider", args.provider !== null],
+    ["--template", args.template !== null],
+    ["--model", args.model !== null],
+    ["--dimensions", args.dimensions !== null],
+    ["--base-url", args.baseUrl !== null],
+    ["--top-k", args.topK !== null],
+    ["--keyword-weight", args.keywordWeight !== null],
+    ["--key-stdin", args.keyStdin],
+  ];
+  return used.find(([, on]) => on)?.[0] ?? null;
+}
+
 /** Run one general-client invocation. Returns the exit code; never calls process.exit. */
 export async function runClient(
   argv: string[],
@@ -117,6 +134,17 @@ export async function runClient(
 
   const flagError = validateGlobalFlags(clientDeps, args);
   if (flagError !== null) return flagError;
+
+  // Flags that exist only for `search` are unknown everywhere else, as they are on Control's CLI
+  // (ticket 211): accepted and then not sent is the one answer a flag must never get.
+  if (head !== "search") {
+    const searchOnly = searchOnlyFlagUsed(args);
+    if (searchOnly !== null) {
+      clientDeps.err(`actana: unknown flag ${searchOnly}.`);
+      clientDeps.err("`actana --help` lists the flags this build knows.");
+      return EXIT_USAGE;
+    }
+  }
 
   if (!(head === "harness" && args.positionals[1] === "skills")) {
     ensureOrchestrationSkillQuietly(clientDeps.home);

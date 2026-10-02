@@ -585,6 +585,45 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     },
   );
 
+  // `--wait-timeout 0` is "no deadline" on every verb that takes the flag, as on Control's CLI (#486).
+  // A deadline that was a refusal made a script computing its budget wait never, and a deadline that
+  // fired at 0 ms made it give up at once; the report landing after a pause is what tells them apart.
+  it("takes --wait-timeout 0 as no deadline on `session wait`: the report lands later and settles it", async () => {
+    await withRegisteredCore();
+    const w = world();
+    setTimeout(() => void w.folder().put(REPORT_1, FINISHED), 60);
+
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "0"], {
+      sessions: w.gateway,
+      shared: w.shared.open,
+    });
+
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(run.out).toEqual([REPORT_1]);
+    expect(run.err.join("\n")).not.toContain("gave up");
+  });
+
+  it("takes --wait-timeout 0 as no deadline on `send --wait`: the report lands later and settles it", async () => {
+    await withRegisteredCore();
+    const w = world();
+    setTimeout(() => void w.folder().put("sessions/session_1/report-1.md", FINISHED), 60);
+
+    const run = await cli().run(["session", "send", "session_1", "go", "--wait", "--turn", "1", "--wait-timeout", "0"], {
+      sessions: w.gateway,
+      shared: w.shared.open,
+    });
+
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(run.err.join("\n")).not.toContain("gave up");
+  });
+
+  it("still refuses a negative --wait-timeout, so only an exact 0 opts out", async () => {
+    await withRegisteredCore();
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "-1"], { sessions: fakeSessionGateway() });
+    expect(run.code).toBe(EXIT_USAGE);
+    expect(run.err.join("\n")).toContain("wants a number of seconds");
+  });
+
   it("waits for the report of the turn it is told, and a stale earlier report does not settle it", async () => {
     await withRegisteredCore();
     const w = world();
@@ -632,24 +671,6 @@ describe("actana session wait, and send --wait (client #8): the report file sett
 
     expect(run.code).toBe(EXIT_FAILURE);
     expect(run.err.join("\n")).toContain("this Core has no session session_typo");
-    expect(w.shared.opened).toEqual([]);
-  });
-
-  it("says so, on stderr and with a failing exit code, when the Shared folder cannot be reached", async () => {
-    await withRegisteredCore();
-    const w = world();
-
-    const run = await cli().run(["session", "wait", "session_1", "--json"], {
-      sessions: w.gateway,
-      shared: async () => {
-        throw new Error("no shared capability");
-      },
-    });
-
-    expect(run.code).toBe(EXIT_FAILURE);
-    expect(run.err.join("\n")).toContain("could not reach the Shared folder");
-    expect(run.err.join("\n")).toContain("no shared capability");
-    expect(JSON.parse(run.out.join("\n")).error).toContain("no shared capability");
   });
 
   it("closes the Shared handle it opened", async () => {
@@ -798,14 +819,15 @@ describe("actana session wait, and send --wait (client #8): the report file sett
     expect(run.err.join("\n")).toContain("only means something with --wait");
   });
 
-  it("documents the contract in the help, and not the status wait", async () => {
+  it("documents the contract in the help, and the status wait as the fallback without a Shared folder", async () => {
     const help = (await cli().run(["session", "--help"])).out.join("\n");
     expect(help).toContain("sessions/<session-id>/report-<turn>.md");
     expect(help).toContain("ACT-REPORT-END");
     expect(help).toContain("through the Shared watcher");
     expect(help).toContain("this side gave up");
-    expect(help).not.toContain("resolves on that turn's end");
-    expect(help).not.toContain("the Core stamps the delivery");
+    // The status-based wait is documented as the fallback, under its own heading.
+    expect(help).toContain("Awaiting a turn when the Core has no Shared folder");
+    expect(help).toContain("the Core stamps the delivery");
   });
 });
 
@@ -832,12 +854,12 @@ describe("actana session send", () => {
       shared: sharedFolder().open,
     });
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
-    // Joined the way a shell already joined them, then the block of this turn: one write, no
-    // carriage return, no second write, no timer (ADR 0026).
-    expect(writes).toEqual([{ text: `yes please ${buildPromptBlock({ sessionId: "session_1", turn: 2 })}`, enter: false }]);
+    // Joined the way a shell already joined them, then the block of this turn: one call that asks
+    // for the carriage return (Enter is the default, Control #404), no timer (ADR 0026).
+    expect(writes).toEqual([{ text: `yes please ${buildPromptBlock({ sessionId: "session_1", turn: 2 })}`, enter: true }]);
     expect(writes[0]!.text.match(/\[Actana standard block/g)).toHaveLength(1);
     expect(run.out).toEqual([]);
-    expect(run.err.join("\n")).toContain("Sent 10 characters and the report block to session session_1.");
+    expect(run.err.join("\n")).toContain("Sent 10 characters and the report block to session session_1 and a carriage return.");
     expect(run.err.join("\n")).toContain("Turn 2: the report goes to sessions/session_1/report-2.md");
     expect(run.err.join("\n")).toContain("session wait session_1 --turn 2");
   });
@@ -853,7 +875,13 @@ describe("actana session send", () => {
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
     expect(writes).toEqual([{ text: "1", enter: true }]);
     expect(shared.opened).toEqual([]);
-    expect(JSON.parse(run.out.join("\n"))).toEqual({ sessionId: "session_1", characters: 1, enter: true, delivered: true });
+    expect(JSON.parse(run.out.join("\n"))).toEqual({
+      sessionId: "session_1",
+      characters: 1,
+      enter: true,
+      submitted: true,
+      delivered: true,
+    });
   });
 
   it("sends with --no-block even when the Shared folder cannot be reached", async () => {
@@ -866,7 +894,7 @@ describe("actana session send", () => {
       },
     });
     expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
-    expect(writes).toEqual([{ text: "y", enter: undefined }].map((w) => ({ ...w, enter: false })));
+    expect(writes).toEqual([{ text: "y", enter: true }]);
   });
 
   it("refuses --no-block with --wait or --turn, and --no-block on other verbs", async () => {
@@ -898,7 +926,8 @@ describe("actana session send", () => {
     expect(JSON.parse(run.out.join("\n"))).toEqual({
       sessionId: "session_1",
       characters: 4,
-      enter: false,
+      enter: true,
+      submitted: true,
       delivered: true,
       turn: 3,
       reportPath: "sessions/session_1/report-3.md",
@@ -923,7 +952,7 @@ describe("actana session send", () => {
     expect(writes[0]!.text).toBe(carried);
   });
 
-  it("writes nothing when it cannot number the turn, and says why on stderr", async () => {
+  it("still delivers the text when the Shared folder cannot be reached, and says no block was appended", async () => {
     await withRegisteredCore();
     const writes: Array<{ text: string; enter: boolean | undefined }> = [];
     const run = await cli().run(["session", "send", "session_1", "hello"], {
@@ -932,10 +961,42 @@ describe("actana session send", () => {
         throw new Error("this Core keeps no Shared folder");
       },
     });
-    expect(run.code).toBe(EXIT_FAILURE);
-    expect(writes).toEqual([]);
-    expect(run.err.join("\n")).toContain("could not reach the Shared folder");
-    expect(run.err.join("\n")).toContain("this Core keeps no Shared folder");
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    // The text, exactly as given, and the return: no block, no turn.
+    expect(writes).toEqual([{ text: "hello", enter: true }]);
+    // One line on stderr says what was left out, and why.
+    const notice = run.err.filter((line) => line.includes("no report block was appended"));
+    expect(notice).toHaveLength(1);
+    expect(notice[0]).toContain("this Core keeps no Shared folder");
+  });
+
+  it("still delivers the text when the Core has a Shared folder it cannot list", async () => {
+    await withRegisteredCore();
+    const writes: Array<{ text: string; enter: boolean | undefined }> = [];
+    const closed: string[] = [];
+    const run = await cli().run(["session", "send", "session_1", "hello", "--json"], {
+      sessions: sendInto(writes),
+      shared: async () => ({
+        shared: {
+          list: async () => {
+            throw new Error("no such folder: sessions/session_1");
+          },
+        } as never,
+        close: () => closed.push("closed"),
+      }),
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(writes).toEqual([{ text: "hello", enter: true }]);
+    expect(run.err.join("\n")).toContain("no report block was appended");
+    // The document is still the plain one, with no turn in it, and the handle was released.
+    expect(JSON.parse(run.out.join("\n"))).toEqual({
+      sessionId: "session_1",
+      characters: 5,
+      enter: true,
+      submitted: true,
+      delivered: true,
+    });
+    expect(closed).toEqual(["closed"]);
   });
 
   it("asks for the return in the same call, so the PTY is resolved once", async () => {
@@ -1062,6 +1123,110 @@ describe("--json means only JSON on stdout", () => {
       expect(parsed.error, argv.join(" ")).toBe("the Core refused");
       // And the human half went where it belongs.
       expect(run.err.join("\n"), argv.join(" ")).toContain("the Core refused");
+    }
+  });
+});
+
+// ── The status-based wait is the fallback when there is no Shared folder (actana/client#11) ─────────
+//
+// With a Shared folder, `wait` and `send --wait` settle on the report file (client #8) and never ask the
+// gateway for a status. Without one — `openShared` cannot attach, or the Core keeps no folder to list —
+// they fall back to Control's wait on the Core's status and say so in one stderr line. Control's own
+// tests of that wait are carried whole in `control-parity-session-command.test.ts`.
+describe("the status-based wait fallback", () => {
+  const noFolder = async () => {
+    throw new Error("this Core keeps no Shared folder");
+  };
+  const FALLBACK = "so the status-based wait was used";
+
+  /** A gateway whose status waits are counted, and which refuses `list` so the report path is not taken. */
+  function statusGateway(waits: string[]) {
+    const settle = () =>
+      fakeStartedSession({
+        wait: async () => ({ status: "finished", exited: false }),
+      });
+    return fakeSessionGateway({
+      wait: async (id) => {
+        waits.push(`wait ${id}`);
+        return settle();
+      },
+      sendAndWait: async (id, text, opts) => {
+        waits.push(`sendAndWait ${id} ${JSON.stringify(text)} enter=${opts?.enter === true}`);
+        return settle();
+      },
+    });
+  }
+
+  it("waits on the Core's status for `session wait`, and says why in one stderr line", async () => {
+    await withRegisteredCore();
+    const waits: string[] = [];
+    const run = await cli().run(["session", "wait", "session_1"], { sessions: statusGateway(waits), shared: noFolder });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(waits).toEqual(["wait session_1"]);
+    const notice = run.err.filter((line) => line.includes(FALLBACK));
+    expect(notice).toHaveLength(1);
+    expect(notice[0]).toContain("this Core keeps no Shared folder");
+  });
+
+  it("writes and waits on the Core's status for `send --wait`, with the return and no block", async () => {
+    await withRegisteredCore();
+    const waits: string[] = [];
+    const run = await cli().run(["session", "send", "session_1", "go", "on", "--wait"], {
+      sessions: statusGateway(waits),
+      shared: noFolder,
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    // The text as given — a report block names a file there is nowhere to read — and the return.
+    expect(waits).toEqual(['sendAndWait session_1 "go on" enter=true']);
+    expect(run.err.filter((line) => line.includes(FALLBACK))).toHaveLength(1);
+    expect(run.err.join("\n")).toContain("Sent 5 characters to session session_1 and a carriage return.");
+  });
+
+  it("falls back as well when the Shared folder opens but cannot be listed, and releases it", async () => {
+    await withRegisteredCore();
+    const waits: string[] = [];
+    const closed: string[] = [];
+    const run = await cli().run(["session", "wait", "session_1"], {
+      sessions: statusGateway(waits),
+      shared: async () => ({
+        shared: {
+          cursor: async () => "0",
+          list: async () => {
+            throw new Error("no such folder");
+          },
+        } as never,
+        close: () => closed.push("closed"),
+      }),
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(waits).toEqual(["wait session_1"]);
+    expect(closed).toEqual(["closed"]);
+  });
+
+  it("does not fall back when the Shared folder is there: the report file settles the wait", async () => {
+    await withRegisteredCore();
+    const shared = fakeShared({ pollIntervalMs: 2 });
+    shared.folder().seed("sessions/session_1/report-1.md", `done\n${END}\n`);
+    // `wait` and `sendAndWait` refuse by default, so a fallback would fail this run.
+    const run = await cli().run(["session", "wait", "session_1", "--wait-timeout", "2"], {
+      sessions: fakeSessionGateway({ list: async () => [row()] }),
+      shared: shared.open,
+    });
+    expect(run.code, run.err.join("\n")).toBe(EXIT_OK);
+    expect(run.err.join("\n")).not.toContain("status-based wait");
+  });
+
+  it("refuses --turn rather than waiting on the wrong turn when there is no Shared folder", async () => {
+    await withRegisteredCore();
+    for (const argv of [
+      ["session", "wait", "session_1", "--turn", "2"],
+      ["session", "send", "session_1", "go", "--wait", "--turn", "2"],
+    ]) {
+      const waits: string[] = [];
+      const run = await cli().run(argv, { sessions: statusGateway(waits), shared: noFolder });
+      expect(run.code, argv.join(" ")).toBe(EXIT_FAILURE);
+      expect(waits, argv.join(" ")).toEqual([]);
+      expect(run.err.join("\n"), argv.join(" ")).toContain("--turn names a report file");
     }
   });
 });
