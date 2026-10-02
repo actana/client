@@ -14,6 +14,7 @@
     "cli-restore-control-parity",
     "cli-session-id",
     "cli-shared-command",
+    "cli-skill-payload-subpath",
     "core-link-shared-frames",
     "core-shared-s3-mode",
     "core-shared-through-core",
@@ -34,6 +35,7 @@
     "sync-version-state-next-5",
     "sync-version-state-next-6",
     "sync-version-state-next-7",
-    "sync-version-state-next-8"
+    "sync-version-state-next-8",
+    "sync-version-state-next-9"
   ]
 }
