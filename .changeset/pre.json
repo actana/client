@@ -7,6 +7,7 @@
   },
   "changesets": [
     "browser-safe-link-frames",
+    "cli-export-host-test-surface",
     "cli-export-port-implementations",
     "cli-parity-await-prompt",
     "cli-restore-control-parity",
@@ -30,6 +31,7 @@
     "sync-version-state-next-3",
     "sync-version-state-next-4",
     "sync-version-state-next-5",
-    "sync-version-state-next-6"
+    "sync-version-state-next-6",
+    "sync-version-state-next-7"
   ]
 }
