@@ -2,10 +2,15 @@
 //
 // `data/orchestration-skill.json` holds the authored skill folders byte-for-byte.
 // ADR 0031 D8: embedded at install time rather than read from a live repo path.
+//
+// **The JSON is a static import, and has to stay one.** This module used to read the file at load
+// from `import.meta.url`. A bundler that emits CommonJS (the Core's tarball bundles this CLI that
+// way) has no `import.meta.url`, so `fileURLToPath(undefined)` threw the moment the module was
+// evaluated and the whole CLI crashed at start (actana/control#578). A static import is something
+// every bundler resolves and inlines; `orchestration-skill-payload.test.ts` bundles this module to
+// CommonJS and starts it, so a dynamic read cannot come back unnoticed.
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import payload from "../../data/orchestration-skill.json" with { type: "json" };
 
 export type OrchestrationSkillPayload = {
   names: readonly string[];
@@ -13,24 +18,15 @@ export type OrchestrationSkillPayload = {
   files: Readonly<Record<string, Readonly<Record<string, string>>>>;
 };
 
-let cached: OrchestrationSkillPayload | null = null;
-
-function loadPayload(): OrchestrationSkillPayload {
-  if (cached) return cached;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const jsonPath = path.join(here, "../../data/orchestration-skill.json");
-  const raw = fs.readFileSync(jsonPath, "utf8");
-  cached = JSON.parse(raw) as OrchestrationSkillPayload;
-  return cached;
-}
+const loaded: OrchestrationSkillPayload = payload;
 
 /** The skill directory names — their addresses in a harness's skills root. */
-export const ORCHESTRATION_SKILL_NAMES: readonly string[] = loadPayload().names;
+export const ORCHESTRATION_SKILL_NAMES: readonly string[] = loaded.names;
 
 /** The in-band marker that makes a copy ours (ADR 0031 D1). */
-export const ORCHESTRATION_SKILL_MARKER: string = loadPayload().marker;
+export const ORCHESTRATION_SKILL_MARKER: string = loaded.marker;
 
 /** Authored skill folders: folder name → relative path → contents. */
 export const ORCHESTRATION_SKILL_FILES: Readonly<
   Record<string, Readonly<Record<string, string>>>
-> = loadPayload().files;
+> = loaded.files;

@@ -72,6 +72,7 @@ import type { ClientDeps } from "../kit/cli-deps.ts";
 import type { ParsedArgs } from "../kit/cli-args.ts";
 import type { CoreRegistrationBlob } from "@actana/sdk/pairing";
 import type {
+  PromptDeliveryReport,
   SessionGateway,
   SessionLogs,
   SessionOutcome,
@@ -110,6 +111,8 @@ Flags
   --wait              start/resume: block until the Core reports it settled
                       send: block until the report of the turn that text starts lands
   --wait-timeout <s>  give up waiting after this many seconds, and say so
+  --await-prompt      start/resume: block only until the Core reports the
+                      starting prompt delivered, so a \`send\` can follow safely
   --turn <n>          send/wait: which turn's report (default: send takes the next
                       turn; wait takes the latest one there is, or turn 1)
   --harness <name>    start: ${KNOWN_HARNESSES.join(", ")}
@@ -130,6 +133,39 @@ Sessions are the Core's, not this command's
   the harness keeps going without this process (#129 D6). \`kill\`, \`send\` and
   \`logs\` name a Session by that id and work on any Session on the Core,
   including ones a Panel or another terminal started.
+
+Running, and ready to be sent to, are different facts (#395)
+  A Session is *running* the moment the Core has spawned its harness, which is
+  what \`start\` returns on. It is *ready for a send* only once the harness has
+  taken the starting prompt — the composer painted, the trust dialog answered,
+  the text in and submitted — and that happens on the harness's clock, after
+  this process has exited. Between the two there is a terminal that is not
+  reading yet, and anything typed into it is discarded:
+
+    SID=$(actana session start "fix it")
+    actana session send $SID continue        # ← can lose both messages
+
+  \`--await-prompt\` is the gate. It blocks until the Core reports the starting
+  prompt delivered, prints the id as usual, and exits zero; if the Core gave up
+  instead (#483) it says what stopped it and exits non-zero, so a script never
+  reads a lost prompt as a started Session. The wait is the Core's — nothing
+  here polls, retries or watches the screen go quiet — and it is bounded by that
+  harness's own ceiling for a composer that never appears, which is why it takes
+  no \`--wait-timeout\` of its own.
+
+  Without it, \`start\` says so on stderr rather than implying otherwise, and
+  \`--json\` carries \`promptDelivered: null\` — not \`false\`, which would be a
+  verdict nobody reached.
+
+  \`--wait\` is the longer wait and the two are refused together. They do not
+  report quite the same fact: \`--wait\` reports whatever the Core said about the
+  prompt while it waited for the turn — \`true\`, \`false\`, or \`null\` when the
+  Core said nothing — while \`--await-prompt\` waits for
+  the Core to say positively that the prompt went into a composer it saw. On a
+  harness whose composer the Core cannot recognise — none of the four this build
+  ships, since #277 gave \`codex\` the last readiness row, but the next harness
+  added arrives that way — \`--await-prompt\` says so and exits non-zero rather
+  than calling a prompt typed on the quiet gap a delivery.
 
 What \`logs\` can show you
   The Core's replay ring, which belongs to the harness's PTY — so a Session that
@@ -251,6 +287,7 @@ async function sessionStart(
   const misused = misusedFlag(args, [
     "--wait",
     "--wait-timeout",
+    "--await-prompt",
     "--harness",
     "--title",
     "--dangerously-skip-permissions",
@@ -260,6 +297,9 @@ async function sessionStart(
   if (args.cwd !== null) {
     return usage(deps, "start", "`--cwd` is gone — every Session starts in the Core's workspace");
   }
+
+  const flagged = awaitPromptFlagRefusal(args);
+  if (flagged) return usage(deps, "start", flagged);
 
   const timeout = waitTimeoutMs(args);
   if (timeout.error) return usage(deps, "start", timeout.error);
@@ -276,6 +316,9 @@ async function sessionStart(
   const prompt = await readText(deps, rest);
   if (prompt.error) return usage(deps, "start", prompt.error);
 
+  const readiness = awaitPromptTextRefusal(args, prompt.text);
+  if (readiness) return usage(deps, "start", readiness);
+
   return withGateway(deps, args, paths, "start", async (gateway) => {
     deps.verbose("starting a session");
     const session = await gateway.start({
@@ -284,7 +327,7 @@ async function sessionStart(
       harness,
       dangerouslySkipPermissions: args.skipPermissions,
     });
-    return reportStartedSession(deps, args, session, timeout.ms);
+    return reportStartedSession(deps, args, session, timeout.ms, deliversText(prompt.text));
   });
 }
 
@@ -295,7 +338,12 @@ async function sessionResume(
   paths: RegistryPaths,
   rest: string[],
 ): Promise<number> {
-  const misused = misusedFlag(args, ["--wait", "--wait-timeout", "--dangerously-skip-permissions"]);
+  const misused = misusedFlag(args, [
+    "--wait",
+    "--wait-timeout",
+    "--await-prompt",
+    "--dangerously-skip-permissions",
+  ]);
   if (misused) return usage(deps, "resume", misused);
 
   const [sessionId, ...promptWords] = rest;
@@ -303,11 +351,17 @@ async function sessionResume(
     return usage(deps, "resume", "a session id is required — `actana session resume <session> [prompt]`");
   }
 
+  const flagged = awaitPromptFlagRefusal(args);
+  if (flagged) return usage(deps, "resume", flagged);
+
   const timeout = waitTimeoutMs(args);
   if (timeout.error) return usage(deps, "resume", timeout.error);
 
   const prompt = await readText(deps, promptWords);
   if (prompt.error) return usage(deps, "resume", prompt.error);
+
+  const readiness = awaitPromptTextRefusal(args, prompt.text);
+  if (readiness) return usage(deps, "resume", readiness);
 
   return withGateway(deps, args, paths, "resume", async (gateway) => {
     deps.verbose(`resuming session ${sessionId}`);
@@ -316,7 +370,7 @@ async function sessionResume(
       ...(prompt.text === null ? {} : { prompt: prompt.text }),
       dangerouslySkipPermissions: args.skipPermissions,
     });
-    return reportStartedSession(deps, args, session, timeout.ms);
+    return reportStartedSession(deps, args, session, timeout.ms, deliversText(prompt.text));
   });
 }
 
@@ -329,6 +383,7 @@ async function reportStartedSession(
   args: ParsedArgs,
   session: StartedSession,
   timeoutMs: number | null,
+  hasPrompt: boolean,
 ): Promise<number> {
   try {
     deps.err(`Started ${session.harness} — session ${session.sessionId}, pty ${session.ptyId}.`);
@@ -339,6 +394,8 @@ async function reportStartedSession(
     // ls` that has not moved.
     if (!session.reportsTurnStart) deps.err(noTurnStartLine(session.harness));
 
+    if (args.awaitPrompt) return await awaitPromptDelivered(deps, args, session);
+
     if (!args.wait) {
       // The one-shot default (#129 D6). The id is the whole of stdout, so it can
       // be captured; everything a person reads went to stderr above.
@@ -348,8 +405,22 @@ async function reportStartedSession(
       // harness's screen to settle first. That is not a race this side has to
       // win: `initialInput` travelled with the spawn and delivery runs inside
       // the Core (ADR 0026 D2), which is exactly why a client can hang up.
+      //
+      // What it *is* is a race the caller has to be told about (#395). Hanging up is fine for the
+      // prompt and not fine for the next thing the caller does: a `session send` typed the moment
+      // this exits lands in a terminal that is not reading yet, and the harness discards it along
+      // with the starting prompt sitting in the same buffer.
+      if (hasPrompt) deps.err(promptNotYetLine());
       if (args.json) {
-        deps.out(formatJson({ ...startedFields(session), waited: false }));
+        deps.out(
+          formatJson({
+            ...startedFields(session),
+            waited: false,
+            // Three-valued, and `null` is the honest one here: not "the prompt was lost" but "this
+            // command exited before the Core decided". A `false` would be a report nobody made.
+            promptDelivered: null,
+          }),
+        );
       } else {
         deps.out(session.sessionId);
       }
@@ -362,6 +433,258 @@ async function reportStartedSession(
     // that is `session kill`.
     session.dispose();
   }
+}
+
+/**
+ * `--await-prompt`: block until the Core says what became of the starting
+ * prompt, and report it (#395).
+ *
+ * **The gap this closes.** `session start` returned as soon as the Core had the
+ * Session running, which is before the harness can take a keystroke — the
+ * composer is not painted, a trust dialog may still be up, and the Core has not
+ * begun typing. `SID=$(actana session start "fix it")` followed immediately
+ * by `actana session send $SID continue` therefore wrote into a terminal that
+ * was not reading, and the harness discarded the send *and* the starting prompt
+ * queued behind it. Nothing in the exit code said so, because nothing had gone
+ * wrong yet.
+ *
+ * **What is waited for, and what is not.** The Core's own verdict, off the
+ * event log this command is already connected to: `session:promptDelivered`, or
+ * `session:promptAbandoned` if it gave up (#483). Not a pause, not a poll, not
+ * a screen going quiet — #191 deleted the last client-side timer that guessed
+ * at this, only the Core sees the harness's screen (ADR 0026 D3), and a
+ * readiness this side invented would be exactly the false success this train
+ * exists to remove. There is no clock here at all: the wait is bounded by the
+ * Core's own per-harness composer ceiling, and by the connection going down.
+ *
+ * **Why delivery is the readiness signal rather than a proxy for it.** A
+ * delivered prompt is a composer that was observed on screen, written into, and
+ * — on the harnesses that confirm echo — seen to hold the text. That is the
+ * strongest statement anybody in this system can make about a harness being
+ * able to take input, and it is a report rather than an inference.
+ *
+ * Shorter than `--wait`, and a different question: `--wait` waits for the turn
+ * to end, which can be an hour. This waits for the Session to become sendable,
+ * which is seconds on a warm harness.
+ */
+async function awaitPromptDelivered(
+  deps: ClientDeps,
+  args: ParsedArgs,
+  session: StartedSession,
+): Promise<number> {
+  deps.err("Waiting for the Core to report the starting prompt delivered…");
+  const report = await session.awaitPromptDelivery();
+
+  if (args.json) {
+    deps.out(
+      formatJson({
+        ...startedFields(session),
+        // No turn was waited for, and the key keeps meaning that across every
+        // verb — one parser, as #289 asks. `--await-prompt` is a wait for the
+        // Session to become sendable, not for it to settle.
+        waited: false,
+        awaitedPrompt: true,
+        // The same three-valued field the other two paths print, and `null`
+        // means the same thing in all three: nobody established it.
+        promptDelivered: promptDeliveredField(report),
+        ...(report.outcome === "abandoned" ? { promptAbandonedReason: report.reason } : {}),
+        ...(report.outcome === "delivered" || report.outcome === "unverified"
+          ? // The Core typed either way; this is the half a script needs to
+            // tell "into a composer somebody saw" from "into whatever was on
+            // screen when it went quiet" without parsing English.
+            { composerObserved: report.outcome === "delivered" }
+          : {}),
+        ...(report.outcome === "unverified" || report.outcome === "unavailable"
+          ? { promptUnknownReason: report.reason }
+          : {}),
+      }),
+    );
+  } else {
+    deps.out(session.sessionId);
+    if (report.outcome === "delivered") {
+      deps.err(
+        `The Core delivered the starting prompt. This session can take an ` +
+          `\`actana session send ${session.sessionId} …\` now.`,
+      );
+    } else if (report.outcome === "abandoned") {
+      deps.err(promptAbandonedLine(session.sessionId, report.reason));
+    } else if (report.outcome === "unverified") {
+      deps.err(promptUnverifiedLine(session.sessionId, session.harness, report.reason));
+    } else {
+      deps.err(promptUnknownLine(session.sessionId, report.reason));
+    }
+  }
+  return report.outcome === "delivered" ? EXIT_OK : EXIT_FAILURE;
+}
+
+/**
+ * The three-valued `promptDelivered`, from what the Core actually said (#395,
+ * and #495's gate review for the second argument).
+ *
+ * `true` only for the one outcome that establishes it. `false` only for the one
+ * the Core adjudicated against. Everything else is `null` — nobody reached a
+ * verdict — and that includes the Core typing without seeing a composer, which
+ * is neither a delivery to a listening harness nor a Core that gave up.
+ *
+ * **`abandoned` is checked first, and it is not redundant.** The latch's report
+ * is whatever spoke *first*, and a dropped link or a harness exit can speak
+ * before the Core's own row arrives; the row is still the Core saying the
+ * prompt was lost, which is why `promptAbandoned()` keeps answering after
+ * something else has concluded (#494 review, observation b). Reading the report
+ * alone would turn that into `null`, which is a weaker claim than the Core made.
+ *
+ * `report` may be `null`: on `--wait` it is read without waiting, so "the Core
+ * has not said anything yet" is a state this has to have an answer for. That
+ * answer is `null` and never `true` — the absence of a verdict is not a
+ * verdict, which is the whole of what this train is for.
+ */
+function promptDeliveredField(
+  report: PromptDeliveryReport | null,
+  abandoned: { reason: string } | null = null,
+): boolean | null {
+  if (abandoned) return false;
+  if (!report) return null;
+  if (report.outcome === "delivered") return true;
+  if (report.outcome === "abandoned") return false;
+  return null;
+}
+
+/**
+ * What a caller is told when the Core typed and never saw a composer (#395,
+ * and the review of #494 that found this reported as success).
+ *
+ * The prompt went out on the quiet gap, into whatever the harness had on screen
+ * when it stopped repainting. That is #483's generic backstop and it is a
+ * reasonable way to *deliver*; it is not a statement that a harness took the
+ * text, because a screen that has stopped repainting is as easily a dialog.
+ * That was codex's failure exactly until #277 measured it — the quiet gap
+ * expiring one millisecond after codex cleared the screen for `Do you trust the
+ * contents of this directory?` — and codex has a readiness row now, so all four
+ * shipped harnesses are vouched for and this line is what the next harness
+ * added gets until it has one too.
+ *
+ * So it exits non-zero and says which of the two happened, rather than letting
+ * a script read the zero exit as "the harness is listening".
+ */
+function promptUnverifiedLine(sessionId: string, harness: string | null, reason: string): string {
+  return (
+    `The Core typed the starting prompt into session ${sessionId}, but cannot vouch for where it ` +
+    `landed: ${reason}. Until ${harness ?? "this harness"} has a composer the Core can ` +
+    `recognise, a start cannot establish that it is ready for a send — ` +
+    `\`actana session logs ${sessionId}\` shows what is on screen.`
+  );
+}
+
+/**
+ * What a bare `start` says about the prompt it has just handed over (#395).
+ *
+ * Printed rather than left to be discovered, and not under `--verbose`, for the
+ * reason {@link noTurnStartLine} is not: the operator who needs this sentence is
+ * precisely the one who did not pass `-v`, and the thing they would otherwise
+ * learn it from is a Session that quietly did nothing.
+ *
+ * It states a fact and does not apologise for it. Hanging up before delivery is
+ * the design (#129 D6) and it is right — delivery runs on the harness's clock
+ * and can take ninety seconds on a cold opencode. What was wrong was letting
+ * the silence read as readiness.
+ */
+function promptNotYetLine(): string {
+  return (
+    `Note: the prompt has not been delivered yet. The Core types it once the harness's ` +
+    `composer is up, which is after this command exits — a \`session send\` before then can be ` +
+    `discarded along with it. \`--await-prompt\` waits for the Core to report it delivered.`
+  );
+}
+
+/**
+ * What a caller is told when this side stopped being able to hear the verdict.
+ *
+ * Deliberately **not** phrased as a failed delivery. The prompt may have landed
+ * a second later; what failed is this command's ability to find out. Reporting
+ * that as a loss would be #483's false report pointed the other way, and it
+ * would send an operator to re-send text that is already in the composer.
+ */
+function promptUnknownLine(sessionId: string, reason: string): string {
+  return (
+    `The Core did not report what became of the starting prompt for session ${sessionId}: ` +
+    `${reason}. The session is running and the prompt may still have landed — ` +
+    `\`actana session logs ${sessionId}\` shows what is on screen before you send it again.`
+  );
+}
+
+/**
+ * Why `--await-prompt` cannot be carried out as asked, or null (#395).
+ *
+ * Refusals rather than silent reinterpretations, because every one of these
+ * spellings is asking for a report that does not exist, and a zero exit on a
+ * report nobody made is how a caller comes to trust one.
+ *
+ * Split in two only because of where each can be answered: the flags are known
+ * before anything is read, and whether there is a prompt is not — a prompt may
+ * be arriving on stdin. Both are checked before a Core is dialled.
+ */
+function awaitPromptFlagRefusal(args: ParsedArgs): string | null {
+  if (!args.awaitPrompt) return null;
+  if (args.wait) {
+    return (
+      "--await-prompt and --wait are two lengths of one wait, and --wait is the longer: it " +
+      "blocks until the turn ends, and reports a prompt the Core gave up on. It does not " +
+      "positively confirm one that landed, which is what --await-prompt is for. Pick one"
+    );
+  }
+  if (args.waitTimeout !== null) {
+    return (
+      "--wait-timeout bounds --wait, not --await-prompt. This wait is already bounded on the " +
+      "Core, by that harness's own ceiling for a composer that never appears (#483), and a " +
+      "second deadline here could only end it early — with nothing to report but the fact that " +
+      "it did"
+    );
+  }
+  return null;
+}
+
+/**
+ * {@link awaitPromptFlagRefusal}'s other half, once the prompt is known.
+ *
+ * **"Has a prompt" is the Core's test, not `!== null`** (#494 review, blocker
+ * 2). `session start ""` and `session start "   "` both look like a
+ * prompt here and are not one there: the empty string is dropped by the gateway
+ * before the spawn frame, and a whitespace-or-control string is trimmed away by
+ * `sanitizeInitialInput`, so no `HarnessPromptDelivery` is built, no row is ever
+ * appended, and the PTY-exit reason row is guarded on the delivery existing too.
+ * A wait for that verdict is a wait for nothing, for as long as the operator
+ * lets it run.
+ */
+function awaitPromptTextRefusal(args: ParsedArgs, prompt: string | null): string | null {
+  if (!args.awaitPrompt || deliversText(prompt)) return null;
+  return (
+    "--await-prompt waits for the Core to report *this* start's prompt delivered, and this " +
+    "start delivers none — a prompt that is empty, or only spaces and control characters, is " +
+    "dropped before the harness sees it. Give a prompt with something in it, or drop the flag"
+  );
+}
+
+/**
+ * Would this text reach the harness as a prompt at all?
+ *
+ * Mirrors `sanitizeInitialInput` in the Core's `pty-manager.ts` (actana/control,
+ * `packages/core/src`), which is the function that actually decides: characters
+ * below 32 and 127 are dropped, and what is left is trimmed — an empty result
+ * means the Core builds no delivery. Mirrored rather than imported because the
+ * client does not depend on the Core; named here so the next person to change
+ * one finds the other.
+ */
+function deliversText(prompt: string | null): boolean {
+  if (prompt === null) return false;
+  return (
+    Array.from(prompt)
+      .filter((ch) => {
+        const code = ch.charCodeAt(0);
+        return code >= 32 && code !== 127;
+      })
+      .join("")
+      .trim() !== ""
+  );
 }
 
 /**
@@ -397,6 +720,17 @@ async function awaitTurn(
   // buffer when it quits, and the main buffer is where nothing was printed.
   const screen = session.screen();
 
+  // The Core gave up delivering the starting prompt (#483). This outranks the status, and it has to:
+  // the status it produces is `needs-input`, which is a settled status and a zero exit, and a
+  // Session that never received its prompt reported as a clean settle is the false success the issue
+  // is about.
+  const abandoned = session.promptAbandoned();
+  // And what the Core said, if it said anything — read *without* waiting, so no path here can hang
+  // that could not before (#495). `promptDelivered` used to be `abandoned === null`, which is
+  // "nothing told me otherwise" wearing the clothes of a report: a harness exiting mid-delivery
+  // would print `promptDelivered: true` beside `exited: true`.
+  const delivery = session.promptDeliveryReport();
+
   if (args.json) {
     deps.out(
       formatJson({
@@ -405,6 +739,18 @@ async function awaitTurn(
         status: outcome.status,
         exited: outcome.exited,
         ...(outcome.exitCode === undefined ? {} : { exitCode: outcome.exitCode }),
+        // A field and not only a sentence, for the same reason `reportsTurnStart` is one.
+        //
+        // **Three-valued, and the third value is the point.** `true` only on the Core's own
+        // `session:promptDelivered` row, `false` only on its `promptAbandoned`, and `null` — "nobody
+        // adjudicated this" — for everything else: a Core that reports neither row, a connection
+        // that went down first, a harness that exited before the Core decided, and a delivery the
+        // Core made without ever seeing a composer. `null` is the value a bare `session start`
+        // reports for the same reason, so no caller meets a shape it has not been told about.
+        promptDelivered: promptDeliveredField(delivery, abandoned),
+        ...(abandoned === null || abandoned.reason === ""
+          ? {}
+          : { promptAbandonedReason: abandoned.reason }),
         // The transcript rides along because a `--json` caller has no second
         // chance at it: the Core's replay ring lives with the PTY, so a
         // harness that exited takes its output with it and a later
@@ -414,10 +760,45 @@ async function awaitTurn(
     );
   } else {
     deps.out(session.sessionId);
+    if (abandoned) {
+      deps.err(promptAbandonedLine(session.sessionId, abandoned.reason, outcome.exited));
+    }
     deps.err(settledLine(outcome));
     deps.err(`\`actana session logs ${session.sessionId}\` prints the transcript while the harness is running.`);
   }
+  if (abandoned) return EXIT_FAILURE;
   return settledWell(outcome) ? EXIT_OK : EXIT_FAILURE;
+}
+
+/**
+ * What a caller is told when the prompt never reached the harness (#483).
+ *
+ * It names the one thing the status cannot. `needs-input` is the Core's honest
+ * report of a harness waiting on a human, and it is the *same* status a harness
+ * that stopped to ask a permission question produces — but the two call for
+ * opposite next steps. There, the answer is `session send`. Here there is no
+ * question and no turn: the prompt is not in the composer, so the text has to
+ * go again, and a script that read the zero exit as success would never know.
+ *
+ * **`exited` decides the second half of it.** One of the reasons that reaches
+ * here is `pty-manager`'s "the harness exited before the prompt was delivered",
+ * and against that the sentence contradicts its own parenthetical and then
+ * recommends a `session send` into a PTY that is gone. So the claim is made
+ * only where it is known: `true` says the harness left, `false` says it is
+ * still there and can take the text, and `undefined` — the `--await-prompt`
+ * path, which is told the verdict and not the process — says neither.
+ */
+function promptAbandonedLine(sessionId: string, reason: string, exited?: boolean): string {
+  const because = reason === "" ? "" : ` (${reason})`;
+  const state = exited === true
+    ? `The harness has since exited — no turn was started. ` +
+      `\`actana session logs ${sessionId}\` prints what it did print; the text has to go to a new session.`
+    : exited === false
+      ? `The harness is running and has not seen it — no turn was started. ` +
+        `Send the text with \`actana session send ${sessionId} …\` once the harness is ready.`
+      : `The harness has not seen it — no turn was started. ` +
+        `Send the text with \`actana session send ${sessionId} …\` once the harness is ready.`;
+  return `The Core did not deliver the starting prompt to session ${sessionId}${because}. ${state}`;
 }
 
 /**
@@ -745,7 +1126,8 @@ async function deliverAndReport(
 ): Promise<number> {
   // One call, one PTY resolution, both writes (#204 review). The command no
   // longer decides anything about the return beyond passing on the flag.
-  const delivered = await gateway.send(sessionId, body, { enter: args.enter });
+  const sent = await gateway.send(sessionId, body, { enter: args.enter });
+  const delivered = sent.ok;
   const characters = turn?.characters ?? body.length;
   const andReturn = args.enter ? " and a carriage return" : "";
 
@@ -759,6 +1141,9 @@ async function deliverAndReport(
         characters,
         enter: args.enter,
         delivered,
+        // Only on a failure, and it says which half went missing, so a script can tell a safe
+        // resend from one that would submit the text twice.
+        ...(sent.ok ? {} : { failed: sent.failed }),
         ...(turn ? { turn: turn.turn, reportPath: sessionReportPath(sessionId, turn.turn) } : {}),
       }),
     );
@@ -771,8 +1156,27 @@ async function deliverAndReport(
       );
     }
   }
-  if (!delivered) {
-    deps.err(`actana session send: the Core did not accept the write to session ${sessionId}.`);
+  if (!sent.ok) {
+    // Two failures, two messages, because the operator's next move differs.
+    if (sent.failed === "text") {
+      deps.err(
+        `actana session send: the Core did not accept the write to session ${sessionId}. ` +
+          `Nothing was written, so sending it again is safe.`,
+      );
+    } else if (body.length === 0) {
+      // A bare `--enter`, whose whole message was the return: nothing landed.
+      deps.err(
+        `actana session send: the Core did not accept the carriage return for session ` +
+          `${sessionId}. Nothing was written, so sending it again is safe.`,
+      );
+    } else {
+      deps.err(
+        `actana session send: session ${sessionId} took the text, but the Core did not accept ` +
+          `the carriage return — so no turn was started. The text was delivered: do not send ` +
+          `it again, or the harness gets it twice. \`actana session send ${sessionId} --enter\` ` +
+          `sends the return on its own.`,
+      );
+    }
     return EXIT_FAILURE;
   }
   return EXIT_OK;
@@ -876,6 +1280,7 @@ function usage(deps: ClientDeps, verb: string, message: string): number {
 const SESSION_FLAGS: ReadonlyArray<{ name: string; used: (args: ParsedArgs) => boolean }> = [
   { name: "--wait", used: (args) => args.wait },
   { name: "--wait-timeout", used: (args) => args.waitTimeout !== null },
+  { name: "--await-prompt", used: (args) => args.awaitPrompt },
   { name: "--turn", used: (args) => args.turn !== null },
   { name: "--harness", used: (args) => args.harness !== null },
   { name: "--cwd", used: (args) => args.cwd !== null },
