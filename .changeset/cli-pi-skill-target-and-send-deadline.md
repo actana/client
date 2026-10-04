@@ -1,5 +1,0 @@
----
-"@actana/cli": patch
----
-
-Two gaps against Control's CLI (actana/client#11). **Pi was missing from the harness tables.** The skill-target table had four rows where Control's has five, so `actana harness skills` (and the quiet install in front of every noun) never wrote the skill for Pi: `--json` answered eight rows instead of ten. The Pi row is back, with Control's resolution of `$PI_CODING_AGENT_DIR` at call time (`pi-agent-dir.ts`, an absolute marker when Pi lives outside the home, which the installer now keeps absolute), and Pi's resume command is `pi --session <id>`, as in Control, not `pi --resume <id>`. **`send --wait` has its default deadline back.** It is 1020 seconds, as in Control (#405), on the report-file wait as well as on the status fallback, because a return that lands on a dialog starts no turn and nothing is ever reported; `--wait-timeout <s>` replaces it and `--wait-timeout 0` removes it. `session wait` on its own still has no default. A script that relied on next.5 to next.8 waiting for ever on a harness that writes no report now gets a timeout after 1020 seconds unless it passes `--wait-timeout 0`.
